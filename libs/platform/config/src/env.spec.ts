@@ -3,6 +3,16 @@ import { EnvValidationError } from './env';
 import { loadApiEnv, loadWorkerEnv } from './app-env';
 
 const DATABASE_URL = 'postgres://app_user:app_user@localhost:5432/erp';
+const CLERK = {
+  CLERK_JWT_KEY: '-----BEGIN PUBLIC KEY-----abc-----END PUBLIC KEY-----',
+  CLERK_SECRET_KEY: 'sk_test_abc',
+  CLERK_AUTHORIZED_PARTIES: 'http://localhost:5173, http://localhost:4200',
+};
+const CLERK_ESPERADO = {
+  CLERK_JWT_KEY: CLERK.CLERK_JWT_KEY,
+  CLERK_SECRET_KEY: CLERK.CLERK_SECRET_KEY,
+  CLERK_AUTHORIZED_PARTIES: ['http://localhost:5173', 'http://localhost:4200'],
+};
 
 describe('F0-06 variáveis de ambiente da api', () => {
   it('aceita um ambiente completo e converte a porta para número', () => {
@@ -11,6 +21,7 @@ describe('F0-06 variáveis de ambiente da api', () => {
       LOG_LEVEL: 'debug',
       API_PORT: '3000',
       DATABASE_URL_APP: DATABASE_URL,
+      ...CLERK,
     });
 
     expect(env).toEqual({
@@ -18,11 +29,21 @@ describe('F0-06 variáveis de ambiente da api', () => {
       LOG_LEVEL: 'debug',
       API_PORT: 3000,
       DATABASE_URL_APP: DATABASE_URL,
+      ...CLERK_ESPERADO,
     });
   });
 
+  it('quebra CLERK_AUTHORIZED_PARTIES em lista, sem espaços sobrando', () => {
+    const env = loadApiEnv({ API_PORT: '3000', DATABASE_URL_APP: DATABASE_URL, ...CLERK });
+
+    expect(env.CLERK_AUTHORIZED_PARTIES).toEqual([
+      'http://localhost:5173',
+      'http://localhost:4200',
+    ]);
+  });
+
   it('aplica os padrões de NODE_ENV e LOG_LEVEL', () => {
-    const env = loadApiEnv({ API_PORT: '3000', DATABASE_URL_APP: DATABASE_URL });
+    const env = loadApiEnv({ API_PORT: '3000', DATABASE_URL_APP: DATABASE_URL, ...CLERK });
 
     expect(env.NODE_ENV).toBe('development');
     expect(env.LOG_LEVEL).toBe('info');
@@ -37,17 +58,25 @@ describe('F0-06 variáveis de ambiente da api', () => {
       expect((error as EnvValidationError).issues).toEqual([
         'API_PORT: variável ausente',
         'DATABASE_URL_APP: variável ausente',
+        'CLERK_JWT_KEY: variável ausente',
+        'CLERK_SECRET_KEY: variável ausente',
+        'CLERK_AUTHORIZED_PARTIES: variável ausente',
       ]);
       expect((error as Error).message).toContain('.env.example');
     }
   });
 
   it('recusa porta fora da faixa e nível de log desconhecido', () => {
-    expect(() => loadApiEnv({ API_PORT: '70000', DATABASE_URL_APP: DATABASE_URL })).toThrow(
-      EnvValidationError,
-    );
     expect(() =>
-      loadApiEnv({ API_PORT: '3000', DATABASE_URL_APP: DATABASE_URL, LOG_LEVEL: 'verboso' }),
+      loadApiEnv({ API_PORT: '70000', DATABASE_URL_APP: DATABASE_URL, ...CLERK }),
+    ).toThrow(EnvValidationError);
+    expect(() =>
+      loadApiEnv({
+        API_PORT: '3000',
+        DATABASE_URL_APP: DATABASE_URL,
+        ...CLERK,
+        LOG_LEVEL: 'verboso',
+      }),
     ).toThrow(EnvValidationError);
   });
 });

@@ -1,3 +1,4 @@
+import { Public } from '@erp/platform-iam';
 import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Pool } from 'pg';
@@ -26,12 +27,14 @@ export class HealthController {
   constructor(@Inject(DB_POOL) private readonly pool: Pool) {}
 
   @Get('health')
+  @Public()
   @ApiOperation({ summary: 'Liveness: o processo está de pé' })
   check(): LivenessStatus {
     return { status: 'ok' };
   }
 
   @Get('ready')
+  @Public()
   @ApiOperation({ summary: 'Readiness: as dependências respondem' })
   async ready(): Promise<ReadinessStatus> {
     try {

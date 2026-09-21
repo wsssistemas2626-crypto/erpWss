@@ -17,10 +17,20 @@ import { DB_ROLES } from '../roles';
 const MIGRATIONS_DIR = join('src', 'infra', 'migrations');
 
 /**
- * Dona do schema `platform` e das funções SQL compartilhadas (ex.: `enable_tenant_rls`).
- * Roda antes de qualquer outra lib de plataforma, independente da ordem alfabética.
+ * Ordem de aplicação das migrations de plataforma.
+ *
+ * Explícita, e não alfabética, porque há FK entre as tabelas de plataforma:
+ * `iam.memberships` referencia `tenancy.tenants`, e alfabeticamente `iam` viria antes.
+ * Uma lib de plataforma com migrations fora desta lista faz o executor falhar — é de
+ * propósito: a ordem precisa ser uma decisão, não um acidente do nome do diretório.
  */
-const SCHEMA_OWNER_LIB = 'libs/platform/db';
+const PLATFORM_MIGRATION_ORDER: readonly string[] = [
+  'libs/platform/db',
+  'libs/platform/tenancy',
+  'libs/platform/iam',
+  'libs/platform/audit',
+  'libs/platform/outbox',
+];
 const LEDGER_SCHEMA = 'platform';
 const LEDGER_TABLE = 'schema_migrations';
 
@@ -65,14 +75,23 @@ export function findWorkspaceRoot(from: string = __dirname): string {
  */
 export function discoverMigrationSets(workspaceRoot: string): readonly MigrationSet[] {
   const platform = setsUnder(workspaceRoot, join(workspaceRoot, 'libs', 'platform'));
-  const schemaOwner = platform.filter((set) => set.module === SCHEMA_OWNER_LIB);
-  const otherPlatform = platform.filter((set) => set.module !== SCHEMA_OWNER_LIB);
 
-  return [
-    ...schemaOwner,
-    ...otherPlatform,
-    ...setsUnder(workspaceRoot, join(workspaceRoot, 'libs', 'modules')),
-  ];
+  const unordered = platform.filter((set) => !PLATFORM_MIGRATION_ORDER.includes(set.module));
+  if (unordered.length > 0) {
+    throw new Error(
+      `Libs de plataforma com migrations fora da ordem declarada: ${unordered
+        .map((set) => set.module)
+        .join(', ')}. Acrescente-as a PLATFORM_MIGRATION_ORDER, na posição correta.`,
+    );
+  }
+
+  const ordered = PLATFORM_MIGRATION_ORDER.flatMap((module) =>
+    platform.filter((set) => set.module === module),
+  );
+
+  // Entre módulos de negócio a ordem não importa: o ADR-002 proíbe FK entre schemas
+  // de módulos diferentes. Alfabética só para o resultado ser sempre o mesmo.
+  return [...ordered, ...setsUnder(workspaceRoot, join(workspaceRoot, 'libs', 'modules'))];
 }
 
 function setsUnder(workspaceRoot: string, parent: string): readonly MigrationSet[] {

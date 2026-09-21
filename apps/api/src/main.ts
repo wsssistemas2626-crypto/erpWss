@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { loadApiEnv } from '@erp/platform-config';
 import { ProblemDetailsFilter, setupOpenApi } from '@erp/platform-http';
+import { IAM_ERROR_STATUS } from '@erp/platform-iam';
 import { NestPinoLogger, createLogger } from '@erp/platform-observability';
 import {
   paginationQuerySchema,
@@ -19,7 +20,7 @@ async function bootstrap(): Promise<void> {
   app.useLogger(new NestPinoLogger(logger));
   app.enableShutdownHooks();
   app.setGlobalPrefix(API_GLOBAL_PREFIX);
-  app.useGlobalFilters(new ProblemDetailsFilter(logger));
+  app.useGlobalFilters(new ProblemDetailsFilter(logger, { statusByCode: IAM_ERROR_STATUS }));
 
   setupOpenApi(app, {
     title: 'ERP',

@@ -147,6 +147,19 @@ describe('F0-03 execução das migrations', () => {
     );
   });
 
+  it('recusa uma lib de plataforma com migrations fora da ordem declarada', () => {
+    const root = mkdtempSync(join(tmpdir(), 'erp-ordem-'));
+    const dir = join(root, 'libs', 'platform', 'nova', 'src', 'infra', 'migrations');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '0001_nova.sql'), 'SELECT 1;\n');
+
+    try {
+      expect(() => discoverMigrationSets(root)).toThrow(/libs\/platform\/nova/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it('é idempotente: aplicar de novo não roda nada', async () => {
     const applied = await applyMigrations(env.ownerUrl);
 
@@ -155,7 +168,7 @@ describe('F0-03 execução das migrations', () => {
 
   it('recusa uma migration já aplicada cujo conteúdo mudou', async () => {
     const root = mkdtempSync(join(tmpdir(), 'erp-migrations-'));
-    const dir = join(root, 'libs', 'platform', 'exemplo', 'src', 'infra', 'migrations');
+    const dir = join(root, 'libs', 'modules', 'exemplo', 'src', 'infra', 'migrations');
     mkdirSync(dir, { recursive: true });
     const file = join(dir, '0001_exemplo.sql');
 

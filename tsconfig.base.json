@@ -26,6 +26,7 @@
       "@erp/platform-tenancy": ["libs/platform/tenancy/src/index.ts"],
       "@erp/platform-tenancy/testing": ["libs/platform/tenancy/src/testing/index.ts"],
       "@erp/platform-iam": ["libs/platform/iam/src/index.ts"],
+      "@erp/platform-iam/testing": ["libs/platform/iam/src/testing/index.ts"],
       "@erp/platform-audit": ["libs/platform/audit/src/index.ts"],
       "@erp/platform-outbox": ["libs/platform/outbox/src/index.ts"],
       "@erp/platform-config": ["libs/platform/config/src/index.ts"],

@@ -7,6 +7,6 @@ export { ZodValidationPipe, toFieldIssues, zodPipe } from './zod-validation.pipe
 
 export { CORRELATION_ID_HEADER, CorrelationIdMiddleware } from './correlation-id.middleware';
 
-export { ProblemDetailsFilter } from './problem-details.filter';
+export { ProblemDetailsFilter, type ProblemDetailsFilterOptions } from './problem-details.filter';
 
 export { OPENAPI_PATH, setupOpenApi, type OpenApiOptions } from './openapi';

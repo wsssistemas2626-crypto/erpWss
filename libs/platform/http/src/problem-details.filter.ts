@@ -29,6 +29,14 @@ const STATUS_BY_CODE: Readonly<Record<string, number>> = {
 
 const DOMAIN_ERROR_DEFAULT_STATUS = 422;
 
+export interface ProblemDetailsFilterOptions {
+  /**
+   * Status HTTP de códigos de erro que a plataforma base não conhece — cada lib
+   * declara os seus e a composição os entrega aqui. Evita um registro global mutável.
+   */
+  readonly statusByCode?: Readonly<Record<string, number>>;
+}
+
 /**
  * Único lugar que transforma exceção em resposta (CLAUDE.md §5): todo erro sai em
  * `application/problem+json` (RFC 9457) com um `code` estável em inglês.
@@ -38,7 +46,14 @@ const DOMAIN_ERROR_DEFAULT_STATUS = 422;
  */
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
-  constructor(private readonly logger: Logger) {}
+  private readonly statusByCode: Readonly<Record<string, number>>;
+
+  constructor(
+    private readonly logger: Logger,
+    options: ProblemDetailsFilterOptions = {},
+  ) {
+    this.statusByCode = { ...STATUS_BY_CODE, ...options.statusByCode };
+  }
 
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
@@ -82,7 +97,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
     }
 
     if (exception instanceof DomainError) {
-      const status = STATUS_BY_CODE[exception.code] ?? DOMAIN_ERROR_DEFAULT_STATUS;
+      const status = this.statusByCode[exception.code] ?? DOMAIN_ERROR_DEFAULT_STATUS;
       return {
         type: 'about:blank',
         title: titleFor(status),

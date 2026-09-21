@@ -21,7 +21,7 @@ EM_ANDAMENTO
 - [x] F0-04 — Shared kernel (Money, ids, erros, CPF/CNPJ) → fase-0#F0-04 · ADR-005
 - [x] F0-05 — Tenancy e isolamento RLS → fase-0#F0-05 · ADR-001
 - [x] F0-06 — Convenções da API e observabilidade → fase-0#F0-06
-- [ ] F0-07 — Verificação de token do Clerk e resolução de tenant → fase-0#F0-07 · ADR-004 · dominio/platform.md
+- [x] F0-07 — Verificação de token do Clerk e resolução de tenant → fase-0#F0-07 · ADR-004 · dominio/platform.md
 - [ ] F0-08 — Autorização RBAC → fase-0#F0-08 · ADR-004
 - [ ] F0-09 — Auditoria → fase-0#F0-09 · dominio/platform.md
 - [ ] F0-10 — Outbox e worker → fase-0#F0-10 · ADR-003
@@ -364,3 +364,52 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
 - A redação por chave cobre nomes conhecidos; um campo sensível com nome novo não é pego
   automaticamente. Vale revisar a lista de `REDACT_PATHS` a cada módulo que trouxer PII.
 - `/ready` só checa o banco. Quando o pg-boss entrar (F0-10), a fila deve entrar na sonda também.
+
+### 2026-09-21 — F0-07 Verificação de token do Clerk e resolução de tenant
+
+**Feito**
+- Interface `IdentityProvider` em `libs/platform/iam` — única lib do backend que importa
+  `@clerk/*` (ADR-004) — com `ClerkIdentityProvider` (`@clerk/backend` 2.x, `verifyToken`
+  networkless com `CLERK_JWT_KEY` e `authorizedParties`).
+- `FakeIdentityProvider` em `@erp/platform-iam/testing`: gera par de chaves RSA no processo e
+  assina tokens no formato v2 do Clerk (`sub`, `sid`, `o.id`, `o.slg`, `azp`, `exp`, `nbf`, `v:2`).
+- Tabelas `platform.users` (global) e `platform.memberships` (com RLS), conforme
+  `docs/dominio/platform.md`.
+- `AuthenticationMiddleware` + `AuthGuard` global + `AuthContext`; `GET /api/v1/me`;
+  decorators `@Public()` e `@AllowWithoutTenant()`.
+- 13 testes de integração cobrindo os 6 cenários Gherkin, mais 7 na composição da API.
+- `withTenantSession(pool, tenantId, fn)` em `@erp/platform-tenancy/testing`, para fixtures.
+- Ordem de migrations de plataforma agora é uma lista explícita.
+
+**Decisões menores**
+- **A verificação do token no teste não é simulada.** O `FakeIdentityProvider` assina com chave
+  local, mas a verificação chama a mesma `verifySessionToken` de produção, apontada para a chave
+  pública local. Expiração, `nbf`, `azp` e assinatura são exercitados no código que roda em
+  produção, sem tocar na rede. Um fake que "verificasse de mentira" testaria o fake.
+- **Autenticação é middleware, não guard.** Ela precisa instalar `AuthContext` e `TenantContext`
+  (AsyncLocalStorage) ao redor de todo o restante da requisição; o escopo de um guard termina antes
+  do handler. O middleware só reúne fatos — inclusive os desfavoráveis, como membership revogado —
+  e o guard aplica a política, porque só ele conhece as exigências da rota.
+- Ordem de recusa no guard, pensada para o usuário entender o problema: não autenticado →
+  não escolheu organização → organização inativa → acesso revogado.
+- `memberships` tem `tenant_id`, logo tem RLS como qualquer tabela de negócio. Isso só funciona
+  porque o tenant é resolvido antes, por `clerk_org_id` em `tenants`, que é global.
+- **A ordem alfabética das migrations de plataforma ia quebrar aqui**: `iam.memberships` tem FK para
+  `tenancy.tenants`, e `iam` vem antes de `tenancy` no alfabeto. Agora existe
+  `PLATFORM_MIGRATION_ORDER`, uma lista explícita, e uma lib de plataforma com migrations fora dela
+  faz o executor falhar — a ordem passa a ser decisão, não acidente do nome do diretório.
+- `ProblemDetailsFilter` passou a aceitar `statusByCode` na construção, e `platform/iam` exporta
+  `IAM_ERROR_STATUS`. Cada lib declara o status dos seus códigos e a composição junta, em vez de um
+  registro global mutável.
+- `withTenantSession` nasceu de um erro real: `FORCE ROW LEVEL SECURITY` vale inclusive para a dona
+  da tabela, então o próprio fixture falhava ao inserir membership sem declarar o tenant.
+- `AUTH_USER_NOT_PROVISIONED` e `TENANT_NOT_PROVISIONED` são temporários: o F0-11 troca a recusa por
+  provisionamento sob demanda.
+- `verifyWebhook` **não** entrou na interface `IdentityProvider`: entra no F0-11, junto do webhook.
+  Declarar agora só produziria um stub que lança.
+- A API passou a exigir `CLERK_JWT_KEY`, `CLERK_SECRET_KEY` e `CLERK_AUTHORIZED_PARTIES` no boot.
+
+**Pendências**
+- O guard ainda não checa permissão nenhuma: `@RequirePermission` e o RBAC são o F0-08.
+- `/api/docs` fica fora do guard (o Swagger registra rotas Express, não rotas do Nest). Em produção
+  isso expõe a documentação sem autenticação — decidir no F0-15 se fecha por ambiente.

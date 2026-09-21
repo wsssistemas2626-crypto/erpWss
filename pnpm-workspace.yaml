@@ -1,10 +1,12 @@
 # Monorepo integrado (Nx): as dependências vivem no package.json da raiz.
 # Este arquivo fixa as configurações do pnpm do workspace.
 allowBuilds:
-  # @scarf/scarf só envia telemetria de instalação: desligado.
+  # postinstall de aviso; não precisamos dele.
+  '@clerk/shared': false
+  # só envia telemetria de instalação: desligado.
   '@scarf/scarf': false
   '@swc/core': true
-  # ssh2/cpu-features só servem ao Docker remoto por SSH; aqui o socket é local
+  # ssh2/cpu-features só servem ao Docker remoto por SSH; aqui o socket é local.
   cpu-features: false
   esbuild: true
   nx: true

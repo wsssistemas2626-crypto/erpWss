@@ -7,3 +7,5 @@ export {
   type TenantIsolationOptions,
   type TenantIsolationSubject,
 } from './assert-tenant-isolation';
+
+export { withTenantSession } from './with-tenant-session';
