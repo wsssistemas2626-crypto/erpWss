@@ -20,6 +20,8 @@
       "@erp/shared-kernel": ["libs/shared/kernel/src/index.ts"],
       "@erp/shared-contracts": ["libs/shared/contracts/src/index.ts"],
       "@erp/platform-db": ["libs/platform/db/src/index.ts"],
+      "@erp/platform-http": ["libs/platform/http/src/index.ts"],
+      "@erp/platform-observability": ["libs/platform/observability/src/index.ts"],
       "@erp/platform-db/testing": ["libs/platform/db/src/testing/index.ts"],
       "@erp/platform-tenancy": ["libs/platform/tenancy/src/index.ts"],
       "@erp/platform-tenancy/testing": ["libs/platform/tenancy/src/testing/index.ts"],

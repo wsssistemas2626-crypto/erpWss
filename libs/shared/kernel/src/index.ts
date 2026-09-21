@@ -8,6 +8,21 @@
 export { DomainError, isDomainError } from './domain-error';
 
 export {
+  CONCURRENCY_CONFLICT,
+  ConcurrencyConflictError,
+  ENTITY_NOT_FOUND,
+  FORBIDDEN,
+  ForbiddenError,
+  NotFoundError,
+  UNAUTHENTICATED,
+  UnauthenticatedError,
+  VALIDATION_ERROR,
+  ValidationError,
+  assertVersion,
+  type FieldIssue,
+} from './errors';
+
+export {
   err,
   isErr,
   isOk,

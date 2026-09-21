@@ -20,7 +20,7 @@ EM_ANDAMENTO
 - [x] F0-03 — Banco, roles e migrations → fase-0#F0-03 · ADR-001
 - [x] F0-04 — Shared kernel (Money, ids, erros, CPF/CNPJ) → fase-0#F0-04 · ADR-005
 - [x] F0-05 — Tenancy e isolamento RLS → fase-0#F0-05 · ADR-001
-- [ ] F0-06 — Convenções da API e observabilidade → fase-0#F0-06
+- [x] F0-06 — Convenções da API e observabilidade → fase-0#F0-06
 - [ ] F0-07 — Verificação de token do Clerk e resolução de tenant → fase-0#F0-07 · ADR-004 · dominio/platform.md
 - [ ] F0-08 — Autorização RBAC → fase-0#F0-08 · ADR-004
 - [ ] F0-09 — Auditoria → fase-0#F0-09 · dominio/platform.md
@@ -312,3 +312,55 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
   exatamente como o ADR-001 descreve, sem exceção para `app_platform`. **O F0-10 precisa resolver
   isso** — provavelmente com uma política adicional na tabela do outbox.
 - `created_by`/`updated_by` de `tenant_settings` ficaram sem FK: `platform.users` só existe no F0-11.
+
+### 2026-09-21 — F0-06 Convenções da API e observabilidade
+
+**Feito**
+- Duas libs de plataforma novas: `@erp/platform-http` (convenções HTTP) e
+  `@erp/platform-observability` (log e correlação).
+- `ZodValidationPipe`/`zodPipe(schema)` validando entrada com os schemas de `@erp/shared-contracts`.
+- `ProblemDetailsFilter`: único lugar que transforma exceção em resposta. Sai sempre em
+  `application/problem+json` (RFC 9457) com `code` estável, mapeando `DomainError.code` para status
+  (400/401/403/404/409) e caindo em 422 para regra de negócio sem status próprio. Erro inesperado
+  vira 500 sem vazar mensagem interna — essa vai para o log, com o `correlationId` que o cliente
+  também recebeu.
+- `CorrelationIdMiddleware`: aceita `X-Correlation-Id` do cliente ou gera, devolve no header e põe
+  no contexto de log (RNF033).
+- Logger pino em JSON, com redação em duas camadas (RNF022) e `mixin` que injeta `correlationId`,
+  `userId` e `tenantId` em toda linha. `NestPinoLogger` faz o log interno do NestJS sair no mesmo
+  formato — sem isso metade do log escapava da redação.
+- Paginação (`paginationQuerySchema`, `paginated`, `toOffsetLimit`) e concorrência otimista
+  (`versionSchema`, `withVersion`, `assertVersion`) em `@erp/shared-contracts` e `@erp/shared-kernel`.
+- Erros padronizados no kernel: `ValidationError`, `NotFoundError`, `ConcurrencyConflictError`,
+  `UnauthenticatedError`, `ForbiddenError`.
+- OpenAPI em `/api/docs`, com os schemas zod publicados como componentes via `z.toJSONSchema()`.
+- `/api/v1/health` (liveness) e `/api/v1/ready` (readiness, consulta o banco).
+- `libs/platform/config`: `loadApiEnv`/`loadWorkerEnv` com zod — **fecha a pendência do F0-01**,
+  o `env.ts` duplicado nos dois apps saiu.
+- 28 testes novos; `pnpm verify` passa com 22 projetos e 66 tarefas.
+- Verificado à mão contra o Postgres local: `/health`, `/ready`, `/api/docs`, 404 em problem+json
+  com o `correlationId` enviado pelo cliente, e log JSON de ponta a ponta.
+
+**Decisões menores**
+- **Duas libs de plataforma fora da lista do F0-02.** `platform/http` e `platform/observability` não
+  estavam previstas, mas pipe, filtro e logger são usados pelos controllers dos módulos: em
+  `apps/api` os módulos não poderiam importá-los. Seguem o padrão `libs/platform/<nome>` e as mesmas
+  tags do ADR-002.
+- Os erros padronizados ficaram em `@erp/shared-kernel`, não na lib HTTP: "não encontrado" e
+  "conflito de versão" são fatos do domínio. Só o mapeamento para status HTTP é da camada web.
+- `assertVersion(entity, enviada, atual)` no kernel: um lugar só decide o que é conflito de versão.
+- A redação do log tem duas camadas porque uma não basta: por chave (o `redact` do pino pega
+  `password`, `token`, `authorization`, `cpf`, `cnpj`, `email` em qualquer nível) e por padrão
+  (CPF, CNPJ e e-mail mascarados mesmo no meio de uma mensagem de texto). O domínio do e-mail é
+  preservado: ajuda a diagnosticar e não identifica ninguém sozinho.
+- A API passou a exigir `DATABASE_URL_APP` no boot — `/ready` consulta o banco.
+- `AppModule.forRoot(env)` recebe a configuração por parâmetro em vez de ler o ambiente: é o que
+  permite o teste montar o mesmo módulo apontando para o Postgres do Testcontainers.
+- `DbPoolLifecycle` fecha o pool no shutdown. Sem ele o processo não terminava sozinho e o teste
+  terminava com erro de conexão derrubada.
+- `@scarf/scarf` (telemetria de instalação, veio junto de uma dependência) com `allowBuilds: false`.
+
+**Pendências**
+- A redação por chave cobre nomes conhecidos; um campo sensível com nome novo não é pego
+  automaticamente. Vale revisar a lista de `REDACT_PATHS` a cada módulo que trouxer PII.
+- `/ready` só checa o banco. Quando o pg-boss entrar (F0-10), a fila deve entrar na sonda também.

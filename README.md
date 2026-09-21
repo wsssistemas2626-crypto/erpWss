@@ -78,6 +78,24 @@ Os testes de integração sobem um Postgres real com Testcontainers
 (`startPostgresTestEnv()` em `@erp/platform-db/testing`) e rodam dentro do `pnpm check`,
 por isso o Docker é obrigatório para rodar os testes.
 
+### Convenções da API
+
+Todo endpoint fica sob `/api/v1`. O que vale para todos, vindo de `@erp/platform-http`:
+
+- **Validação** com o schema zod de `@erp/shared-contracts`: `@Body(zodPipe(schema))`.
+- **Erros** em `application/problem+json` (RFC 9457), com `code` estável em inglês — é por ele que
+  o front escolhe a mensagem em pt-BR. Regra de negócio sem status próprio vira 422.
+- **Paginação** `?page=1&pageSize=20` (máximo 100), resposta `{ items, page, pageSize, total }`.
+- **Concorrência otimista**: `PUT`/`PATCH` exigem `version` e devolvem 409 `CONCURRENCY_CONFLICT`.
+- **Correlação**: `X-Correlation-Id` é aceito do cliente ou gerado, devolvido na resposta e
+  presente em todo log da requisição.
+- **OpenAPI** em `/api/docs` (JSON em `/api/docs-json`), com os contratos zod como componentes.
+- **Sondas**: `/api/v1/health` (liveness, sem dependências) e `/api/v1/ready` (readiness, checa o banco).
+
+O log é JSON estruturado (pino), inclusive o log interno do NestJS. Senha, token, CPF, CNPJ e e-mail
+são apagados ou mascarados antes de sair (RNF022), e toda linha carrega `correlationId` e
+`tenantId` quando existem (RNF033).
+
 ### Libs e fronteiras entre módulos
 
 As libs vivem em `libs/` e são importadas pelos aliases `@erp/*` declarados em
