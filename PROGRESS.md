@@ -239,3 +239,32 @@ EM_ANDAMENTO
   (Empresas e filiais), porque muda o tipo da coluna e a validação.
 - Cobertura mínima de 80% ainda não é medida: não há `domain/` nem `application/` no repositório e
   o `@vitest/coverage-v8` não foi instalado. Vale ligar no primeiro item que criar `domain/`.
+
+### 2026-09-21 — ADR-008 e decisão sobre o CNPJ
+
+Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas pelo humano.
+
+**ADR-008 — Empacotamento dos apps de backend (pendência aberta no F0-02)**
+- Escrito `docs/adr/ADR-008-empacotamento-backend.md`, status **Aceito**, decidido pelo agente sob
+  autorização explícita do humano para conduzir a Fase 0 de forma autônoma. Reversível no GATE-F0.
+- Decisão: `tsc` com `rootDir` na raiz do workspace + `tsc-alias` reescrevendo os aliases `@erp/*`
+  no JavaScript emitido. O `tsconfig.base.json` continua sendo a única fonte de verdade dos aliases,
+  do editor ao runtime.
+- Descartadas: libs como pacotes do workspace pnpm (custo repetido a cada módulo novo e resolução
+  dupla fonte/dist), bundler nos apps (toolchain e modos de falha desproporcionais) e resolução de
+  aliases em runtime (não resolve o TS6059 e atrapalha depurador e profiler).
+- Verificado antes de decidir, não no papel: build, `tsc-alias`, `node dist/...` e requisição em
+  `/api/v1/health` respondendo com a lib carregada e os decorators do Nest intactos. Importando
+  `@erp/shared-kernel`, o build emitiu só os 11 arquivos daquela lib.
+- Aplicado em `apps/api` e `apps/worker`: `tsconfig.app.json`, alvos `build` e `serve`.
+  Entrada agora em `dist/<app>/apps/<app>/src/main.js`.
+- Dependência nova: `tsc-alias` (build).
+
+**CNPJ alfanumérico (pendência aberta no F0-04)**
+- Decisão do humano: **manter o campo numérico**. A validação segue sendo o módulo 11 sobre 14
+  dígitos, e `docs/dominio/cadastros.md` (`cnpj char(14)`, só dígitos) continua valendo como está.
+  Se o alfanumérico entrar depois, será uma mudança de schema e de validação, com migration própria.
+
+**Modo de trabalho a partir daqui**
+- O humano autorizou conduzir a Fase 0 de forma autônoma. Os itens seguem um commit por item, todos
+  no branch `feat/fase-0`, empilhado sobre `feat/f0-04-shared-kernel`.

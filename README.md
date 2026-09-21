@@ -97,6 +97,10 @@ Cada app tem `project.json` (alvos Nx: `build`, `serve`, `lint`, `typecheck`, `t
 `tsconfig.json` (typecheck, inclui os testes), `tsconfig.app.json` (build) e configuração do Vitest.
 As dependências ficam todas no `package.json` da raiz (monorepo integrado do Nx).
 
+O build de `api` e `worker` é `tsc` a partir da raiz do workspace seguido de `tsc-alias`, que troca
+os aliases `@erp/*` por caminhos relativos no JavaScript emitido (ADR-008). Só entram no build as
+libs que o app importa. O ponto de entrada fica em `dist/<app>/apps/<app>/src/main.js`.
+
 ## Pré-requisitos humanos (antes de rodar o loop)
 
 O agente não consegue fazer estes passos. Sem eles, os itens de autenticação param com `TAREFA_BLOQUEADA`.
