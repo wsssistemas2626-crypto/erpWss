@@ -117,28 +117,34 @@ describe('F0-03 schemas dos módulos', () => {
 
 describe('F0-03 execução das migrations', () => {
   it('descobre as pastas de migrations com a plataforma primeiro', () => {
-    const sets = discoverMigrationSets(findWorkspaceRoot());
+    const modules = discoverMigrationSets(findWorkspaceRoot()).map((set) => set.module);
 
-    expect(sets.map((set) => set.module)).toEqual([
-      'libs/platform/db',
-      'libs/modules/organization',
-      'libs/modules/partners',
-      'libs/modules/projects',
-    ]);
+    // libs/platform/db é dona do schema e das funções SQL compartilhadas, então vem
+    // antes de qualquer outra lib de plataforma, mesmo fora da ordem alfabética.
+    expect(modules[0]).toBe('libs/platform/db');
+
+    const plataforma = modules.filter((module) => module.startsWith('libs/platform/'));
+    const modulos = modules.filter((module) => module.startsWith('libs/modules/'));
+
+    expect(modules).toEqual([...plataforma, ...modulos]);
+    expect(modulos).toEqual([...modulos].sort());
+    expect(plataforma).toContain('libs/platform/tenancy');
   });
 
-  it('registra no ledger o que foi aplicado, com a plataforma primeiro', async () => {
+  it('registra no ledger o que foi aplicado, na ordem em que rodou', async () => {
     const ledger = await env.ownerPool.query<{ module: string; name: string }>(
-      'select module, name from platform.schema_migrations order by applied_at, module',
+      'select module, name from platform.schema_migrations order by applied_at, name',
     );
+    const modules = ledger.rows.map((row) => row.module);
 
-    expect(ledger.rows.map((row) => row.module)).toEqual([
-      'libs/platform/db',
-      'libs/modules/organization',
-      'libs/modules/partners',
-      'libs/modules/projects',
-    ]);
+    // A ordem dos módulos no ledger é a mesma que a descoberta produz.
+    const esperada = discoverMigrationSets(findWorkspaceRoot()).map((set) => set.module);
+    expect([...new Set(modules)]).toEqual(esperada);
+    expect(modules[0]).toBe('libs/platform/db');
     expect(ledger.rows[0]?.name).toBe('0001_platform_schema.sql');
+    expect(modules.lastIndexOf('libs/platform/tenancy')).toBeLessThan(
+      modules.indexOf('libs/modules/organization'),
+    );
   });
 
   it('é idempotente: aplicar de novo não roda nada', async () => {

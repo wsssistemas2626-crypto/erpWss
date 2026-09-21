@@ -1,5 +1,24 @@
 /**
  * Superfície pública de @erp/platform-tenancy.
- * TenantContext e TenantDb.withTenantTx (item F0-05, ADR-001).
+ *
+ * O contexto do tenant (AsyncLocalStorage) e o único caminho de acesso ao banco em
+ * contexto de requisição (ADR-001). O utilitário de teste de isolamento fica em
+ * `@erp/platform-tenancy/testing`, fora desta entrada.
  */
-export {};
+export {
+  TENANT_CONTEXT_MISSING,
+  getTenantContext,
+  requireTenantId,
+  runInTenantContext,
+  type TenantContext,
+} from './tenant-context';
+
+export { TenantDb, type TenantTransaction } from './tenant-db';
+
+export {
+  TENANT_ID_SETTING,
+  currentTenantId,
+  tenantSettings,
+  tenantStatus,
+  tenants,
+} from './infra/schema';

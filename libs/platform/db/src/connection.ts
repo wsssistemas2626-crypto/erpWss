@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { Pool, type PoolConfig } from 'pg';
+import { Pool, type Client, type PoolClient, type PoolConfig } from 'pg';
 
 export type Db = ReturnType<typeof drizzle>;
 
@@ -21,6 +21,9 @@ export function createDbPool(connectionString: string, options: DbPoolOptions = 
   return new Pool(config);
 }
 
-export function createDb(pool: Pool): Db {
-  return drizzle(pool);
+/** Aceita pool, cliente do pool ou cliente avulso: o `TenantDb` amarra o Drizzle à conexão da transação. */
+export type DbConnection = Pool | PoolClient | Client;
+
+export function createDb(connection: DbConnection): Db {
+  return drizzle(connection);
 }

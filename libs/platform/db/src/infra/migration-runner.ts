@@ -15,6 +15,12 @@ import { DB_ROLES } from '../roles';
  */
 
 const MIGRATIONS_DIR = join('src', 'infra', 'migrations');
+
+/**
+ * Dona do schema `platform` e das funções SQL compartilhadas (ex.: `enable_tenant_rls`).
+ * Roda antes de qualquer outra lib de plataforma, independente da ordem alfabética.
+ */
+const SCHEMA_OWNER_LIB = 'libs/platform/db';
 const LEDGER_SCHEMA = 'platform';
 const LEDGER_TABLE = 'schema_migrations';
 
@@ -58,8 +64,13 @@ export function findWorkspaceRoot(from: string = __dirname): string {
  * cada grupo em ordem alfabética para que o resultado seja sempre o mesmo.
  */
 export function discoverMigrationSets(workspaceRoot: string): readonly MigrationSet[] {
+  const platform = setsUnder(workspaceRoot, join(workspaceRoot, 'libs', 'platform'));
+  const schemaOwner = platform.filter((set) => set.module === SCHEMA_OWNER_LIB);
+  const otherPlatform = platform.filter((set) => set.module !== SCHEMA_OWNER_LIB);
+
   return [
-    ...setsUnder(workspaceRoot, join(workspaceRoot, 'libs', 'platform')),
+    ...schemaOwner,
+    ...otherPlatform,
     ...setsUnder(workspaceRoot, join(workspaceRoot, 'libs', 'modules')),
   ];
 }

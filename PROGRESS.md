@@ -19,7 +19,7 @@ EM_ANDAMENTO
 - [x] F0-02 — Estrutura de libs e fronteiras → fase-0#F0-02 · ADR-002
 - [x] F0-03 — Banco, roles e migrations → fase-0#F0-03 · ADR-001
 - [x] F0-04 — Shared kernel (Money, ids, erros, CPF/CNPJ) → fase-0#F0-04 · ADR-005
-- [ ] F0-05 — Tenancy e isolamento RLS → fase-0#F0-05 · ADR-001
+- [x] F0-05 — Tenancy e isolamento RLS → fase-0#F0-05 · ADR-001
 - [ ] F0-06 — Convenções da API e observabilidade → fase-0#F0-06
 - [ ] F0-07 — Verificação de token do Clerk e resolução de tenant → fase-0#F0-07 · ADR-004 · dominio/platform.md
 - [ ] F0-08 — Autorização RBAC → fase-0#F0-08 · ADR-004
@@ -268,3 +268,47 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
 **Modo de trabalho a partir daqui**
 - O humano autorizou conduzir a Fase 0 de forma autônoma. Os itens seguem um commit por item, todos
   no branch `feat/fase-0`, empilhado sobre `feat/f0-04-shared-kernel`.
+
+### 2026-09-21 — F0-05 Tenancy e isolamento
+
+**Feito**
+- `platform.tenants` (global, sem `tenant_id` e sem RLS — é o próprio registro dos tenants) e
+  `platform.tenant_settings` (primeira tabela de negócio, com RLS), em
+  `libs/platform/tenancy/src/infra/migrations/0001_tenants.sql`.
+- Helper de migration `platform.enable_tenant_rls(regclass)`: função PL/pgSQL que aplica
+  `ENABLE` + `FORCE ROW LEVEL SECURITY` e a política exata do ADR-001. Módulo nenhum escreve a
+  condição à mão nem esquece o `FORCE`. Usada como `SELECT platform.enable_tenant_rls('schema.tabela');`.
+- `TenantContext` sobre AsyncLocalStorage (`runInTenantContext`, `getTenantContext`,
+  `requireTenantId`) e `TenantDb.withTenantTx(fn)`, que abre a transação, aplica
+  `set_config('app.tenant_id', ..., true)` e entrega cliente pg + Drizzle amarrados àquela conexão.
+- `assertTenantIsolation(subject, { tenantDb, tenantA, tenantB })` em
+  `@erp/platform-tenancy/testing`, cobrindo os três cenários da story. Não depende de framework de
+  teste: lança `Error` com mensagem que diz o que provavelmente está errado na política.
+- Schema Drizzle de `tenants` e `tenant_settings`.
+- 15 testes: os 3 cenários Gherkin, `FORCE` ligado, `tenants` sem RLS, rollback, e o
+  `assertTenantIsolation` **reprovando** uma tabela sem RLS criada de propósito — sem isso o
+  utilitário poderia estar passando por não testar nada.
+
+**Decisões menores**
+- **Corrigida uma ordem de migrations que ia quebrar no F0-09.** A descoberta ordenava as libs de
+  plataforma alfabeticamente, então `audit` e `config` viriam antes de `db`, que é dona do schema e
+  das funções SQL compartilhadas. Agora `libs/platform/db` vem sempre primeiro, e o resto segue em
+  ordem alfabética. Cada migration também concede privilégios explicitamente na própria tabela, em
+  vez de depender só do `ALTER DEFAULT PRIVILEGES`.
+- `withTenantTx` **não aceita** `tenantId` por parâmetro: lê sempre do contexto. Passar o tenant como
+  argumento abriria exatamente o caminho que o ADR-001 fecha. O worker define o contexto com
+  `runInTenantContext` antes de tocar o banco.
+- `libs/platform/tenancy` ficou sem NestJS: nada a injeta ainda. O módulo Nest entra no F0-07, que é
+  quem resolve o tenant na requisição.
+- `set_config(..., true)` é local à transação. Verificado: depois do COMMIT o Postgres devolve string
+  vazia, não o tenant anterior, e a consulta seguinte na mesma conexão do pool falha ao converter
+  `''` para uuid — ou seja, a falha segura vale também para conexão reaproveitada.
+- `createDb()` passou a aceitar `Pool | PoolClient | Client`, para o Drizzle poder ser amarrado à
+  conexão da transação.
+
+**Pendências**
+- `app_platform` precisa atravessar tenants para publicar o outbox, mas `FORCE ROW LEVEL SECURITY`
+  vale para todo mundo e `BYPASSRLS` é proibido. A política padrão do `enable_tenant_rls` ficou
+  exatamente como o ADR-001 descreve, sem exceção para `app_platform`. **O F0-10 precisa resolver
+  isso** — provavelmente com uma política adicional na tabela do outbox.
+- `created_by`/`updated_by` de `tenant_settings` ficaram sem FK: `platform.users` só existe no F0-11.
