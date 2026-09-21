@@ -26,7 +26,7 @@ EM_ANDAMENTO
 - [x] F0-09 — Auditoria → fase-0#F0-09 · dominio/platform.md
 - [x] F0-10 — Outbox e worker → fase-0#F0-10 · ADR-003
 - [x] F0-11 — Sincronização Clerk: webhooks e JIT → fase-0#F0-11 · ADR-004
-- [ ] F0-12 — Front: autenticação e troca de organização (Clerk) → fase-0#F0-12
+- [x] F0-12 — Front: autenticação e troca de organização (Clerk) → fase-0#F0-12
 - [ ] F0-13 — Front: layout, menu por permissão, i18n, formatação → fase-0#F0-13
 - [ ] F0-14 — Infraestrutura E2E e `pnpm verify` completo → fase-0#F0-14
 - [ ] F0-15 — CI no GitHub Actions → fase-0#F0-15
@@ -624,3 +624,50 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
 **Pendências**
 - Nenhuma. Só documentação: nenhum arquivo de código, migration ou teste foi tocado, e a pendência
   registrada no F0-11 sobre o desvio do ADR está resolvida.
+
+### 2026-09-21 — F0-12 Front: autenticação e troca de organização (Clerk)
+
+**Feito**
+- Clerk CLI 3.3.0 instalado e `clerk init --app app_3JdisYmzXgGLw4l1bhicBekMrMX` executado na raiz:
+  detectou React, instalou `@clerk/react` 6.16.1 (o SDK que o ADR-004 exige), não gerou arquivo algum
+  e preencheu `CLERK_SECRET_KEY` e `VITE_CLERK_PUBLISHABLE_KEY` no `.env` com a instância de
+  desenvolvimento `ins_3JdisX94VeS6wuWdu6HOzDtOxMS` do app `ERP-WSS`. `clerk doctor` sem pendências.
+- `libs/web/shell` ganhou a superfície de autenticação: `AppProviders` (`ClerkProvider` com
+  localização `ptBR` + `QueryClientProvider`), `RequireAuth`, `RequireOrganization`,
+  `OrganizationCacheReset` e as páginas 401/403/404.
+- `ApiClient` tipado pelos schemas zod de `@erp/shared-contracts`: busca o token via `getToken()`
+  a cada chamada, envia `Authorization: Bearer`, valida a resposta contra o schema e converte
+  `application/problem+json` em `ApiError` com `status` e `code` preservados.
+- `apps/web` passou a compor as rotas: `/entrar` e `/cadastrar` públicas com `<SignIn/>` e
+  `<SignUp/>`, rotas protegidas sob
+  `RequireAuth` → `RequireOrganization` → `AppLayout` (com `<OrganizationSwitcher/>` e `<UserButton/>`),
+  `/401`, `/403` e catch-all 404.
+- 26 testes de componente e de unidade com o Clerk simulado via `vi.mock`, sem rede. Os dois cenários
+  Gherkin da story viraram teste: redirecionamento para `/entrar` sem sessão e descarte do cache do
+  TanStack Query ao trocar de organização.
+- `pnpm verify` passa (66 tasks, 22 projetos). `nx build web` e o dev server verificados manualmente.
+
+**Decisões menores**
+- Dependências novas, todas já previstas na stack do CLAUDE.md §3: `@clerk/localizations` 4.17.1,
+  `react-router` 8.4.0 e `@tanstack/react-query` 5.103.1.
+- Clerk CLI instalado com `npm -g` e não `pnpm install -g`: o `pnpm` global exigiria configurar
+  `PNPM_HOME` no profile do shell. É ferramenta de desenvolvedor, não dependência do repo.
+- `apps/web/src/messages.ts` foi absorvido por `libs/web/shell/src/messages.ts`: com o shell passando
+  a ter texto de UI próprio (guardas, páginas de erro), dois módulos de mensagens se dividiriam sem
+  critério. O F0-13 troca esse módulo único pelo react-i18next mantendo as chaves.
+- `App.tsx` exporta só o mapa de `<Routes>`, sem router: `main.tsx` monta o `BrowserRouter` e os testes
+  montam um `MemoryRouter`, o que permite testar redirecionamento sem navegador.
+- `envDir: '../../'` no `apps/web/vite.config.mts`. O `.env` é único e fica na raiz do monorepo
+  (CLAUDE.md §6.1), mas o Vite o procura na raiz do projeto Vite (`apps/web`): sem isso
+  `VITE_CLERK_PUBLISHABLE_KEY` chegava indefinida e o app quebrava no boot. Pego no smoke test do
+  dev server, não pelos testes (que simulam o Clerk).
+- O cache é descartado com `queryClient.clear()` comparando o `orgId` anterior, e não por chave de
+  query com o tenant: todo dado em cache pertence a um tenant (ADR-001), então não há o que preservar.
+- `ApiClient` recebe `fetchImpl` injetável, para os testes não tocarem a rede.
+
+**Pendências**
+- `CLERK_JWT_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET`, `CLERK_AUTHORIZED_PARTIES` e
+  `E2E_CLERK_USER_EMAIL`/`E2E_CLERK_USER_PASSWORD` continuam com valores de teste: o `clerk init` não
+  os preenche. Precisam vir do Dashboard antes de exercitar o webhook do F0-11 e o E2E do F0-14.
+- Bundle do web em 776 kB (o SDK do Clerk domina). Avaliar code-splitting por rota no F0-13.
+- Layout, menu por permissão, i18n de verdade e formatação seguem como F0-13, conforme planejado.
