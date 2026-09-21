@@ -1,0 +1,21 @@
+{
+  "name": "erp-autoloop",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": { "moby": false },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": "corepack enable && curl -fsSL https://claude.ai/install.sh | bash",
+  "customizations": {
+    "vscode": {
+      "extensions": ["anthropic.claude-code", "dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+    }
+  },
+  "forwardPorts": [3000, 5173, 5432],
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/vscode/.local/bin",
+    "CHECK_CMD": "pnpm verify",
+    "TIMEOUT_RODADA": "45m"
+  }
+}

@@ -1,0 +1,3 @@
+# Força fim de linha LF (evita quebra de scripts no container quando o repositório é usado no Windows)
+* text=auto eol=lf
+*.sh text eol=lf
