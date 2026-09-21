@@ -16,7 +16,7 @@ EM_ANDAMENTO
 
 ### Fase 0 — Fundação (`docs/backlog/fase-0-fundacao.md`)
 - [x] F0-01 — Scaffold do monorepo → fase-0#F0-01
-- [ ] F0-02 — Estrutura de libs e fronteiras → fase-0#F0-02 · ADR-002
+- [x] F0-02 — Estrutura de libs e fronteiras → fase-0#F0-02 · ADR-002
 - [ ] F0-03 — Banco, roles e migrations → fase-0#F0-03 · ADR-001
 - [ ] F0-04 — Shared kernel (Money, ids, erros, CPF/CNPJ) → fase-0#F0-04 · ADR-005
 - [ ] F0-05 — Tenancy e isolamento RLS → fase-0#F0-05 · ADR-001
@@ -100,3 +100,51 @@ EM_ANDAMENTO
 **Pendências**
 - Nenhuma bloqueante. `libs/`, tags e `@nx/enforce-module-boundaries` são o F0-02; cobertura mínima
   de 80% passa a valer quando existirem `domain/` e `application/` (F0-04 em diante).
+
+### 2026-09-21 — F0-02 Estrutura de libs e fronteiras entre módulos
+
+**Feito**
+- 16 libs criadas com `project.json`, `tsconfig.json`, `vitest.config.mts` e `src/index.ts`:
+  `shared/kernel`, `shared/contracts`, `platform/{db,tenancy,iam,audit,outbox,config}`,
+  `modules/{projects,projects-api,partners,partners-api,organization,organization-api}`,
+  `web/{shell,projects}`. As libs de módulo já vêm com `domain/`, `application/`, `infra/` e `http/`.
+- Tags do ADR-002 (`type:*` + `scope:*`) em todos os `project.json`, incluindo os três apps.
+- Aliases `@erp/*` em `tsconfig.base.json` e resolução via `vite-tsconfig-paths` nos configs de
+  Vitest/Vite, para que os testes e o front resolvam as libs pelos mesmos caminhos.
+- `@nx/enforce-module-boundaries` em nível `error` com as restrições do ADR-002, e
+  `@eslint-community/eslint-comments/no-restricted-disable` proibindo silenciá-la.
+- `tools/architecture`: 11 testes que escrevem fixtures dentro de libs reais e rodam o ESLint sobre
+  eles, cobrindo os dois cenários Gherkin da story mais as fronteiras de `-api`, do front e do
+  `eslint-disable`. Roda dentro do `pnpm check`.
+- `pnpm verify` passa: 20 projetos, 60 tarefas, 21 testes.
+
+**Decisões menores**
+- Aliases no formato `@erp/<escopo>-<nome>` (`@erp/platform-db`, `@erp/projects-api`), com os módulos
+  de negócio sem prefixo de escopo (`@erp/projects`) porque o nome do módulo já é o escopo.
+- `libs/web/shell` recebeu `scope:shared` (e não `scope:shell`): é o escopo que o ADR-002 cita como
+  compartilhado do front, e é o que permite que `web/projects` dependa dele.
+- Acrescentei duas restrições que o ADR-002 não lista explicitamente, por coerência com o resto da
+  tabela: `type:shared` só depende de `type:shared`, e `type:tool` (o `tools/architecture`) não
+  depende de lib nenhuma. Se a revisão do GATE-F0 discordar, basta removê-las do `eslint.config.mjs`.
+- Os fixtures do teste de arquitetura ficam em `__arch_fixtures__`, ignorado pelo ESLint, pelo
+  `tsconfig.base.json` e pelo git; o teste roda o ESLint com `--no-ignore` para enxergá-los. Isso
+  evita que os arquivos temporários quebrem o `lint`/`typecheck` das libs rodando em paralelo.
+- Todos os `vitest.config.ts` viraram `.mts`: o carregador nativo de config do Vite 8 emitia 19
+  avisos de "ESM syntax in a file loaded as CommonJS". `pnpm verify` agora roda sem avisos.
+- `@typescript-eslint/parser` virou dependência direta para satisfazer o peer do `@nx/eslint-plugin`.
+
+**Pendências**
+- **Resolução das libs em tempo de build e de execução dos apps (decisão arquitetural).**
+  Hoje `apps/api` e `apps/worker` são compilados com `tsc -p tsconfig.app.json` e `rootDir: src`.
+  Verificado empiricamente: assim que um app importa uma lib, o build falha com
+  `TS6059: File '.../libs/shared/kernel/src/index.ts' is not under 'rootDir'`, e mesmo compilando,
+  o Node não resolveria `@erp/*` em runtime (os aliases são só do TypeScript). `lint`, `typecheck` e
+  `test` funcionam — só o build e o `serve` dos apps de backend são afetados.
+  As opções são: (a) transformar as libs em pacotes do workspace pnpm, com build próprio;
+  (b) empacotar os apps com um bundler que resolva os aliases; (c) resolver os aliases em runtime.
+  É escolha de empacotamento não coberta por ADR aceito, então não improvisei. **Precisa ser decidida
+  antes do F0-05**, que é o primeiro item em que um app importa uma lib; provavelmente vira um ADR-008.
+- A unificação do `env.ts` de `apps/api` e `apps/worker` em `libs/platform/config`, anotada no log do
+  F0-01, **não** foi feita nesta rodada: a lib foi criada vazia, mas mover o código para ela faria os
+  apps importarem uma lib e esbarraria exatamente na pendência acima. Fica para a rodada que resolver
+  o empacotamento (ou para o F0-06, que já mexe em configuração e observabilidade).

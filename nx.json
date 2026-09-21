@@ -7,7 +7,7 @@
       "default",
       "!{projectRoot}/**/*.spec.ts",
       "!{projectRoot}/**/*.spec.tsx",
-      "!{projectRoot}/vitest.config.ts",
+      "!{projectRoot}/vitest.config.mts",
       "!{projectRoot}/vite.config.mts",
       "!{projectRoot}/tsconfig.spec.json"
     ],

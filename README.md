@@ -52,6 +52,20 @@ pnpm verify
 A API sobe em `http://localhost:${API_PORT}/api/v1` (health em `/api/v1/health`) e o front em
 `http://localhost:5173`.
 
+### Libs e fronteiras entre módulos
+
+As libs vivem em `libs/` e são importadas pelos aliases `@erp/*` declarados em
+`tsconfig.base.json` (ex.: `@erp/shared-kernel`, `@erp/partners-api`, `@erp/web-shell`).
+
+Cada `project.json` carrega as tags do ADR-002 (`type:*` e `scope:*`), e o ESLint aplica as
+restrições de dependência a partir delas — inclusive a que impede um módulo de importar a
+implementação de outro. A regra não pode ser silenciada: `eslint-disable` de
+`@nx/enforce-module-boundaries` é erro de lint.
+
+O teste `tools/architecture` exercita essas fronteiras (importações proibidas e permitidas) e roda
+dentro do `pnpm check`. Ele cria arquivos temporários em `__arch_fixtures__` dentro das libs e os
+remove ao final.
+
 ### Estrutura de um projeto
 Cada app tem `project.json` (alvos Nx: `build`, `serve`, `lint`, `typecheck`, `test`),
 `tsconfig.json` (typecheck, inclui os testes), `tsconfig.app.json` (build) e configuração do Vitest.
