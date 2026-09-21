@@ -1,5 +1,5 @@
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { screen } from '@testing-library/react';
+import { Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const clerk = vi.hoisted(() => ({
@@ -12,18 +12,18 @@ vi.mock('@clerk/react', () => ({
   OrganizationList: () => <div data-testid="organization-list" />,
 }));
 
+import { renderWithShell } from '../testing';
 import { RequireAuth } from './require-auth';
 
 function renderProtected(initialPath = '/projetos') {
-  return render(
-    <MemoryRouter initialEntries={[initialPath]}>
-      <Routes>
-        <Route path="/entrar" element={<p>tela de login</p>} />
-        <Route element={<RequireAuth />}>
-          <Route path="/projetos" element={<p>conteúdo protegido</p>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+  return renderWithShell(
+    <Routes>
+      <Route path="/entrar" element={<p>tela de login</p>} />
+      <Route element={<RequireAuth />}>
+        <Route path="/projetos" element={<p>conteúdo protegido</p>} />
+      </Route>
+    </Routes>,
+    { route: initialPath },
   );
 }
 

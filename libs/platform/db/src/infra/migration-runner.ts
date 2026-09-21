@@ -27,6 +27,7 @@ const MIGRATIONS_DIR = join('src', 'infra', 'migrations');
 const PLATFORM_MIGRATION_ORDER: readonly string[] = [
   'libs/platform/db',
   'libs/platform/tenancy',
+  'libs/platform/config',
   'libs/platform/iam',
   'libs/platform/audit',
   'libs/platform/outbox',

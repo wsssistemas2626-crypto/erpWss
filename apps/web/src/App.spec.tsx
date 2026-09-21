@@ -1,7 +1,8 @@
-import { messages } from '@erp/web-shell';
-import { render, screen } from '@testing-library/react';
+import { ptBRTranslations } from '@erp/web-shell';
+import { meFixture, renderWithShell } from '@erp/web-shell/testing';
+import type { MeResponse } from '@erp/shared-contracts';
+import { screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { MemoryRouter } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const clerk = vi.hoisted(() => ({
@@ -21,12 +22,8 @@ vi.mock('@clerk/react', () => ({
 
 import { App } from './App';
 
-function renderAt(path: string) {
-  return render(
-    <MemoryRouter initialEntries={[path]}>
-      <App />
-    </MemoryRouter>,
-  );
+function renderAt(path: string, me: MeResponse = meFixture()) {
+  return renderWithShell(<App />, { route: path, me });
 }
 
 describe('F0-12 rotas do front', () => {
@@ -47,15 +44,17 @@ describe('F0-12 rotas do front', () => {
 
     renderAt('/');
 
-    expect(screen.getByRole('heading', { name: messages.organization.selectTitle })).toBeDefined();
+    expect(
+      screen.getByRole('heading', { name: ptBRTranslations.organization.selectTitle }),
+    ).toBeDefined();
   });
 
-  it('mostra o seletor de organização e o menu do usuário nas rotas autenticadas', () => {
+  it('mostra o seletor de organização e o menu do usuário nas rotas autenticadas', async () => {
     renderAt('/');
 
-    expect(screen.getByTestId('clerk-organization-switcher')).toBeDefined();
+    expect(await screen.findByTestId('clerk-organization-switcher')).toBeDefined();
     expect(screen.getByTestId('clerk-user-button')).toBeDefined();
-    expect(screen.getByText(messages.shellPlaceholder)).toBeDefined();
+    expect(screen.getByText(ptBRTranslations.shellPlaceholder)).toBeDefined();
   });
 
   it('serve a tela de login como rota pública', () => {
@@ -63,7 +62,7 @@ describe('F0-12 rotas do front', () => {
 
     renderAt('/entrar');
 
-    expect(screen.getByRole('heading', { name: messages.auth.signInTitle })).toBeDefined();
+    expect(screen.getByRole('heading', { name: ptBRTranslations.auth.signInTitle })).toBeDefined();
   });
 
   it('serve a tela de cadastro como rota pública', () => {
@@ -71,14 +70,16 @@ describe('F0-12 rotas do front', () => {
 
     renderAt('/cadastrar');
 
-    expect(screen.getByRole('heading', { name: messages.auth.signUpTitle })).toBeDefined();
+    expect(screen.getByRole('heading', { name: ptBRTranslations.auth.signUpTitle })).toBeDefined();
     expect(screen.getByTestId('clerk-sign-up')).toBeDefined();
   });
 
-  it('mostra a página 403 em acesso negado', () => {
+  it('mostra a página 403 em acesso negado', async () => {
     renderAt('/403');
 
-    expect(screen.getByRole('heading', { name: messages.errors.forbiddenTitle })).toBeDefined();
+    expect(
+      await screen.findByRole('heading', { name: ptBRTranslations.errors.forbiddenTitle }),
+    ).toBeDefined();
   });
 
   it('mostra a página 401 quando a sessão expira', () => {
@@ -87,13 +88,44 @@ describe('F0-12 rotas do front', () => {
     renderAt('/401');
 
     expect(
-      screen.getByRole('heading', { name: messages.errors.unauthenticatedTitle }),
+      screen.getByRole('heading', { name: ptBRTranslations.errors.unauthenticatedTitle }),
     ).toBeDefined();
   });
 
   it('mostra a página 404 em rota inexistente', () => {
     renderAt('/rota-que-nao-existe');
 
-    expect(screen.getByRole('heading', { name: messages.errors.notFoundTitle })).toBeDefined();
+    expect(
+      screen.getByRole('heading', { name: ptBRTranslations.errors.notFoundTitle }),
+    ).toBeDefined();
+  });
+});
+
+describe('F0-13 menu respeita permissões', () => {
+  beforeEach(() => {
+    clerk.auth = { isLoaded: true, isSignedIn: true, orgId: 'org_a' };
+  });
+
+  it('não mostra "Projetos" para um usuário sem nenhuma permissão do módulo projects', async () => {
+    renderAt('/', meFixture({ modules: ['platform', 'projects'], permissions: [] }));
+
+    await screen.findByRole('navigation', { name: ptBRTranslations.menu.label });
+
+    expect(screen.queryByRole('link', { name: ptBRTranslations.menu.projects })).toBeNull();
+    expect(screen.getByRole('link', { name: ptBRTranslations.menu.home })).toBeDefined();
+  });
+
+  it('mostra "Projetos" quando o usuário tem a permissão e o módulo está habilitado', async () => {
+    renderAt(
+      '/',
+      meFixture({
+        modules: ['platform', 'projects'],
+        permissions: ['projects.project.read', 'platform.audit.read'],
+      }),
+    );
+
+    expect(await screen.findByRole('link', { name: ptBRTranslations.menu.projects })).toBeDefined();
+    expect(screen.getByRole('link', { name: ptBRTranslations.menu.audit })).toBeDefined();
+    expect(screen.queryByRole('link', { name: ptBRTranslations.menu.roles })).toBeNull();
   });
 });

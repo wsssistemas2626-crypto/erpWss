@@ -92,4 +92,4 @@ export { PLATFORM_MODULE, PLATFORM_PERMISSIONS } from './rbac/platform-permissio
 export { PERMISSION_UNKNOWN, ROLE_IS_SYSTEM, RoleService } from './rbac/role-service';
 export { ADMINISTRATOR_ROLE, SYSTEM_ROLES, type SystemRoleDefinition } from './rbac/system-roles';
 export { AuthenticationMiddleware } from './http/authentication.middleware';
-export { MeController, type MeResponse } from './http/me.controller';
+export { MeController } from './http/me.controller';

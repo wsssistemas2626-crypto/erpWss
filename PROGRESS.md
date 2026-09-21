@@ -27,7 +27,7 @@ EM_ANDAMENTO
 - [x] F0-10 — Outbox e worker → fase-0#F0-10 · ADR-003
 - [x] F0-11 — Sincronização Clerk: webhooks e JIT → fase-0#F0-11 · ADR-004
 - [x] F0-12 — Front: autenticação e troca de organização (Clerk) → fase-0#F0-12
-- [ ] F0-13 — Front: layout, menu por permissão, i18n, formatação → fase-0#F0-13
+- [x] F0-13 — Front: layout, menu por permissão, i18n, formatação → fase-0#F0-13
 - [ ] F0-14 — Infraestrutura E2E e `pnpm verify` completo → fase-0#F0-14
 - [ ] F0-15 — CI no GitHub Actions → fase-0#F0-15
 - [ ] GATE-F0 — Revisão humana da Fase 0
@@ -671,3 +671,74 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
   os preenche. Precisam vir do Dashboard antes de exercitar o webhook do F0-11 e o E2E do F0-14.
 - Bundle do web em 776 kB (o SDK do Clerk domina). Avaliar code-splitting por rota no F0-13.
 - Layout, menu por permissão, i18n de verdade e formatação seguem como F0-13, conforme planejado.
+
+### 2026-09-21 — F0-13 Front: layout, menu por permissão, i18n e formatação
+
+**Feito**
+- `GET /api/v1/me` passou a responder também `permissions` (RBAC local) e `modules`
+  (habilitados no tenant), com schema zod em `libs/shared/contracts/src/me.ts` — o mesmo
+  contrato tipa o controller e valida a resposta no front.
+- `platform.tenant_modules` criada (migration `platform/config/0001`), com RLS, `UNIQUE
+  (tenant_id, module)` e as colunas padrão de tabela de negócio. `ModuleCatalog` (catálogo
+  do que a instalação oferece, preenchido na composição da API) + `TenantModuleService`
+  (lê os desvios, grava com auditoria). A API registra hoje só o módulo `platform`.
+- `libs/web/shell` ganhou: i18n pt-BR com react-i18next (`I18nProvider`, `createI18n`),
+  formatação brasileira (`formatMoney`, `formatDate`, `formatDateTime`, `formatHours`,
+  `formatQuantity`, `formatPercentage`), `ApiProvider`/`useApi`, `useMe`, o filtro de menu
+  (`visibleMenuItems`), o layout `AppShell` e os componentes base sobre Tailwind 4 +
+  shadcn/ui: `Button`, `Input`, `Dialog`, `ConfirmDialog`, `EmptyState`, `DataTable`
+  (paginada pelo servidor) e `Form`/`FormField`/`FormActions`/`useZodForm`.
+- `apps/web` compõe o menu em `src/layout/menu-items.ts` (Início, Projetos, Papéis,
+  Auditoria), carrega `styles.css` com os tokens de cor e faz proxy de `/api` para a API
+  em desenvolvimento.
+- Os dois cenários Gherkin da story viraram teste: "Projetos" não aparece para quem não
+  tem permissão do módulo (`apps/web/src/App.spec.tsx` e `app-shell.spec.tsx`), e
+  `formatMoney('1234.5')` = `R$ 1.234,50` com `2026-09-21T02:00:00Z` = `20/09/2026`
+  (`format.spec.ts`). 61 testes no front e 18 no `platform-config`.
+- `pnpm verify` passa: 22 projetos, 66 tarefas. `nx build web` também.
+
+**Decisões menores**
+- `tenant_modules` foi para `libs/platform/config` e não para `tenancy`: o mapa de módulos
+  (`docs/01-mapa-modulos.md`) dá "módulos ativos" a `platform/config`. A lib, que só lia
+  variáveis de ambiente, passou a ter migrations — entrou em `PLATFORM_MIGRATION_ORDER`
+  logo depois de `tenancy`, por causa da FK para `platform.tenants`.
+- Ausência de linha em `tenant_modules` significa **habilitado**: o catálogo do que existe
+  fica no código, a tabela guarda só o desvio. Evita semear N linhas por tenant novo e faz
+  um módulo recém-lançado acender sozinho. `docs/dominio/platform.md` atualizado.
+- `setEnabled` grava e audita na mesma transação (§4.5), com `CREATE`/`UPDATE` conforme já
+  houvesse linha; regravar o mesmo estado não gera versão nem registro. Ainda não há
+  endpoint para isso — a tela de administração de módulos não está em nenhuma story.
+- O módulo `messages.ts` do F0-12 virou `i18n/pt-BR.ts`, com as mesmas chaves, como estava
+  planejado. Os testes passaram a comparar com `ptBRTranslations.*`, não com string solta.
+- `MenuItem.labelKey` é tipado por `keyof AppTranslations['menu']`: um item de menu com
+  rótulo sem tradução não compila.
+- `ApiProvider` com cliente injetado não chama `useAuth()` (renderiza outro componente):
+  é o que permite testar componente sem `ClerkProvider` nenhum.
+- Entrada de teste nova `@erp/web-shell/testing` (`renderWithShell`, `createStubApiClient`,
+  `meFixture`), no mesmo padrão de `@erp/platform-db/testing`. O `ApiClient` de verdade é
+  exercitado; quem responde é um `fetchImpl` em memória, sem rede.
+- Formatação sem `number`: `Intl.NumberFormat` recebe a string decimal (ADR-005). Data sem
+  hora (`2026-09-21`) é reordenada sem conversão de fuso — convertê-la jogaria para o dia
+  anterior.
+- `@tanstack/react-table` fixado em 8.x: o 9 instalado por padrão tem API nova
+  (`useTable`/`tableFeatures`) e ainda pouca tração.
+- Dependências novas, todas dentro da stack do CLAUDE.md §3: `i18next`, `react-i18next`,
+  `react-hook-form`, `@hookform/resolvers`, `@tanstack/react-table`, `tailwindcss` +
+  `@tailwindcss/vite`, e os utilitários que o shadcn/ui pressupõe (`clsx`, `tailwind-merge`,
+  `class-variance-authority`, `lucide-react`, `@radix-ui/react-dialog`,
+  `@radix-ui/react-slot`). Componentes escritos à mão no padrão shadcn/ui em vez de
+  `npx shadcn init`, que assume um app único e não uma lib de monorepo.
+
+**Pendências**
+- Bundle do web em 878 kB (o SDK do Clerk domina; eram 776 kB no F0-12). Code-splitting por
+  rota não ajuda enquanto o `AppShell` usa `OrganizationSwitcher` e `UserButton`: fica para
+  quando houver rota pesada de verdade.
+- Tema só claro. Os tokens de cor estão num `@theme` único em `apps/web/src/styles.css`;
+  modo escuro é trocar esse bloco quando alguém pedir.
+- `FormField` cobre campo de texto; select, data e campo monetário chegam com a primeira
+  tela que precisar deles (Fase 1).
+- Não há tela de administração de módulos do tenant: `tenant_modules` só se altera por SQL
+  ou pelo serviço. Sem story para isso ainda.
+- As chaves do Clerk `CLERK_JWT_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET`,
+  `CLERK_AUTHORIZED_PARTIES` e `E2E_CLERK_USER_EMAIL`/`E2E_CLERK_USER_PASSWORD` continuam
+  com valores de teste — bloqueiam o E2E do F0-14, como já registrado no F0-12.

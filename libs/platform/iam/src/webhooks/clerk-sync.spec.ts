@@ -1,4 +1,5 @@
 import { AuditRegistry, AuditService } from '@erp/platform-audit';
+import { ModuleCatalog, TenantModuleService } from '@erp/platform-config';
 import { startPostgresTestEnv, type PostgresTestEnv } from '@erp/platform-db/testing';
 import { ProblemDetailsFilter } from '@erp/platform-http';
 import { createLogger } from '@erp/platform-observability';
@@ -54,6 +55,7 @@ const discard = new Writable({
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
     { provide: PermissionService, useFactory: () => permissionService },
+    { provide: TenantModuleService, useFactory: () => tenantModuleService },
   ],
 })
 class TestModule {
@@ -63,6 +65,7 @@ class TestModule {
 }
 
 let permissionService: PermissionService;
+let tenantModuleService: TenantModuleService;
 
 beforeAll(async () => {
   env = await startPostgresTestEnv();
@@ -72,7 +75,10 @@ beforeAll(async () => {
   permissionService = new PermissionService(tenantDb, repository);
   const catalog = new PermissionCatalog();
   catalog.register(PLATFORM_MODULE, PLATFORM_PERMISSIONS);
+  const modules = new ModuleCatalog();
+  modules.register([{ key: PLATFORM_MODULE, description: 'Administração da plataforma' }]);
   audit = new AuditService(tenantDb, new AuditRegistry());
+  tenantModuleService = new TenantModuleService(tenantDb, modules, audit);
   roles = new RoleService(tenantDb, repository, permissionService, catalog, audit);
   sync = new IdentitySyncService(env.appPool, env.platformPool, tenantDb, roles, audit);
 

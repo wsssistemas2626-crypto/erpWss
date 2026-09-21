@@ -1,12 +1,17 @@
 import { useAuth } from '@clerk/react';
 import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { messages } from '../messages';
 import { SIGN_IN_PATH } from './app-providers';
 
 /** Tela neutra enquanto o Clerk hidrata a sessão, para não piscar o login. */
 export function SessionLoading() {
-  return <p role="status">{messages.auth.loading}</p>;
+  const { t } = useTranslation();
+  return (
+    <p role="status" className="p-6 text-sm text-muted-foreground">
+      {t('auth.loading')}
+    </p>
+  );
 }
 
 export interface RequireAuthProps {

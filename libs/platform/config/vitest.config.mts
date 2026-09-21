@@ -10,5 +10,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.spec.ts'],
+    // O teste de `tenant_modules` sobe um Postgres real via Testcontainers.
+    testTimeout: 120_000,
+    hookTimeout: 180_000,
   },
 });

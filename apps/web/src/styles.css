@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+
+/*
+ * O Tailwind v4 descobre as classes varrendo o projeto onde o CSS mora. As telas também
+ * vivem em `libs/web/*`, então essas pastas entram explicitamente.
+ */
+@source '../../../libs/web';
+
+/*
+ * Tokens de cor no formato do shadcn/ui: cada `--color-*` vira `bg-*`, `text-*`,
+ * `border-*` e `ring-*`. Trocar a identidade visual é trocar este bloco.
+ */
+@theme {
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.145 0 0);
+  --color-primary: oklch(0.47 0.13 250);
+  --color-primary-foreground: oklch(0.985 0 0);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-destructive-foreground: oklch(0.985 0 0);
+  --color-muted: oklch(0.97 0 0);
+  --color-muted-foreground: oklch(0.556 0 0);
+  --color-border: oklch(0.922 0 0);
+  --color-ring: oklch(0.47 0.13 250);
+}
+
+@layer base {
+  html {
+    /* pt-BR em todo o documento: hifenização, leitores de tela e `:lang()`. */
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}

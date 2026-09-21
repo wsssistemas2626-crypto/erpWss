@@ -2,6 +2,9 @@ import { ClerkProvider } from '@clerk/react';
 import { ptBR } from '@clerk/localizations';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
+import type { ApiClient } from '../api/api-client';
+import { ApiProvider } from '../api/api-provider';
+import { I18nProvider } from '../i18n/i18n-provider';
 import { OrganizationCacheReset } from './organization-cache';
 
 /** Rota pública de login; usada também como destino após o logout. */
@@ -28,13 +31,21 @@ export interface AppProvidersProps {
   children: ReactNode;
   /** Injetável nos testes para inspecionar o cache. */
   queryClient?: QueryClient;
+  /** Injetável nos testes, para o front não tocar a rede. */
+  apiClient?: ApiClient;
 }
 
 /**
- * Providers do front: Clerk (localizado em pt-BR, ADR-004) e TanStack Query.
- * O `ClerkProvider` fica por fora para que o cliente HTTP possa usar `getToken()`.
+ * Providers do front: Clerk (localizado em pt-BR, ADR-004), i18n, TanStack Query e o
+ * cliente HTTP. O `ClerkProvider` fica por fora porque o `ApiProvider` precisa do
+ * `getToken()` da sessão.
  */
-export function AppProviders({ publishableKey, children, queryClient }: AppProvidersProps) {
+export function AppProviders({
+  publishableKey,
+  children,
+  queryClient,
+  apiClient,
+}: AppProvidersProps) {
   const client = queryClient ?? createQueryClient();
 
   return (
@@ -43,10 +54,14 @@ export function AppProviders({ publishableKey, children, queryClient }: AppProvi
       localization={ptBR}
       afterSignOutUrl={SIGN_IN_PATH}
     >
-      <QueryClientProvider client={client}>
-        <OrganizationCacheReset />
-        {children}
-      </QueryClientProvider>
+      <I18nProvider>
+        <QueryClientProvider client={client}>
+          <ApiProvider client={apiClient}>
+            <OrganizationCacheReset />
+            {children}
+          </ApiProvider>
+        </QueryClientProvider>
+      </I18nProvider>
     </ClerkProvider>
   );
 }

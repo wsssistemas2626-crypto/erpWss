@@ -1,4 +1,9 @@
-import type { ApiEnv } from '@erp/platform-config';
+import {
+  MODULE_CATALOG,
+  ModuleCatalog,
+  TenantModuleService,
+  type ApiEnv,
+} from '@erp/platform-config';
 import {
   AUDIT_PERMISSIONS,
   AUDIT_REGISTRY,
@@ -113,6 +118,26 @@ export class AppModule implements NestModule {
           },
         },
         {
+          provide: MODULE_CATALOG,
+          useFactory: (): ModuleCatalog => {
+            const catalog = new ModuleCatalog();
+            catalog.register([
+              { key: PLATFORM_MODULE, description: 'Administração da plataforma' },
+            ]);
+            // Cada módulo de negócio se registra aqui, a partir da Fase 1.
+            return catalog;
+          },
+        },
+        {
+          provide: TenantModuleService,
+          useFactory: (
+            tenantDb: TenantDb,
+            catalog: ModuleCatalog,
+            audit: AuditService,
+          ): TenantModuleService => new TenantModuleService(tenantDb, catalog, audit),
+          inject: [TenantDb, MODULE_CATALOG, AuditService],
+        },
+        {
           provide: PermissionRepository,
           useFactory: (): PermissionRepository => new PermissionRepository(),
         },
@@ -194,7 +219,9 @@ export class AppModule implements NestModule {
         IDENTITY_PROVIDER,
         IdentityRepository,
         PERMISSION_CATALOG,
+        MODULE_CATALOG,
         PermissionService,
+        TenantModuleService,
         RoleService,
         AuditService,
         IdentitySyncService,

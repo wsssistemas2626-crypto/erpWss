@@ -38,6 +38,7 @@
       "@erp/organization": ["libs/modules/organization/src/index.ts"],
       "@erp/organization-api": ["libs/modules/organization-api/src/index.ts"],
       "@erp/web-shell": ["libs/web/shell/src/index.ts"],
+      "@erp/web-shell/testing": ["libs/web/shell/src/testing/index.ts"],
       "@erp/web-projects": ["libs/web/projects/src/index.ts"]
     }
   },

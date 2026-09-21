@@ -1,24 +1,7 @@
-import { OrganizationSwitcher, UserButton } from '@clerk/react';
-import { messages } from '@erp/web-shell';
-import { Outlet } from 'react-router';
+import { AppShell } from '@erp/web-shell';
+import { MENU_ITEMS } from './menu-items';
 
-/**
- * Cabeçalho das rotas autenticadas. O menu por permissão e o layout definitivo
- * chegam no item F0-13.
- */
+/** Rota-pai das telas autenticadas: o layout do shell com o menu deste app. */
 export function AppLayout() {
-  return (
-    <>
-      <header>
-        <span>{messages.appName}</span>
-        <nav aria-label={messages.organization.switcherLabel}>
-          <OrganizationSwitcher hidePersonal afterSelectOrganizationUrl="/" />
-        </nav>
-        <UserButton />
-      </header>
-      <main>
-        <Outlet />
-      </main>
-    </>
-  );
+  return <AppShell items={MENU_ITEMS} />;
 }

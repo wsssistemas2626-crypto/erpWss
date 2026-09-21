@@ -121,6 +121,8 @@ describe('F0-06 composição da API', () => {
     expect(await response.json()).toMatchObject({
       user: { email: 'pessoa@example.com' },
       tenant: null,
+      permissions: [],
+      modules: [],
     });
   });
 

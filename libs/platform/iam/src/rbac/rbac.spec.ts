@@ -2,6 +2,7 @@ import { startPostgresTestEnv, type PostgresTestEnv } from '@erp/platform-db/tes
 import { ProblemDetailsFilter } from '@erp/platform-http';
 import { createLogger } from '@erp/platform-observability';
 import { AuditRegistry, AuditService } from '@erp/platform-audit';
+import { ModuleCatalog, TenantModuleService } from '@erp/platform-config';
 import { TenantDb } from '@erp/platform-tenancy';
 import { withTenantSession } from '@erp/platform-tenancy/testing';
 import { CONCURRENCY_CONFLICT, ENTITY_NOT_FOUND, newId, type EntityId } from '@erp/shared-kernel';
@@ -13,6 +14,7 @@ import { AUTH_FORBIDDEN, IAM_ERROR_STATUS } from '../errors';
 import { AuthGuard } from '../http/auth.guard';
 import { AuthenticationMiddleware } from '../http/authentication.middleware';
 import { PermissionGuard } from '../http/permission.guard';
+import { MeController } from '../http/me.controller';
 import { RolesController } from '../http/roles.controller';
 import { IDENTITY_PROVIDER } from '../identity-provider';
 import { IdentityRepository } from '../infra/identity-repository';
@@ -38,6 +40,7 @@ let roleService: RoleService;
 let auditService: AuditService;
 let syncService: IdentitySyncService;
 let permissionService: PermissionService;
+let tenantModuleService: TenantModuleService;
 
 const discard = new Writable({
   write(_chunk, _encoding, callback) {
@@ -46,7 +49,7 @@ const discard = new Writable({
 });
 
 @Module({
-  controllers: [RolesController],
+  controllers: [MeController, RolesController],
   providers: [
     { provide: IDENTITY_PROVIDER, useValue: identity },
     {
@@ -55,6 +58,7 @@ const discard = new Writable({
     },
     { provide: IdentitySyncService, useFactory: () => syncService },
     { provide: PermissionService, useFactory: () => permissionService },
+    { provide: TenantModuleService, useFactory: () => tenantModuleService },
     { provide: RoleService, useFactory: () => roleService },
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
@@ -74,8 +78,11 @@ beforeAll(async () => {
   const tenantDb = new TenantDb(env.appPool);
   const repository = new PermissionRepository();
   permissionService = new PermissionService(tenantDb, repository);
+  const moduleCatalog = new ModuleCatalog();
+  moduleCatalog.register([{ key: PLATFORM_MODULE, description: 'Administração da plataforma' }]);
   const auditRegistry = new AuditRegistry();
   auditService = new AuditService(tenantDb, auditRegistry);
+  tenantModuleService = new TenantModuleService(tenantDb, moduleCatalog, auditService);
   roleService = new RoleService(tenantDb, repository, permissionService, catalog, auditService);
   syncService = new IdentitySyncService(
     env.appPool,
@@ -387,5 +394,24 @@ describe('F0-08 atribuição de papéis invalida o cache na hora', () => {
     });
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe('F0-13 GET /me alimenta o menu do front', () => {
+  it('devolve as permissões efetivas do RBAC local e os módulos habilitados', async () => {
+    const response = await call('GET', '/me', ADMIN);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      permissions: expect.arrayContaining(['platform.role.read']),
+      modules: ['platform'],
+    });
+  });
+
+  it('usuário sem permissão do módulo recebe a lista vazia', async () => {
+    const response = await call('GET', '/me', LEITOR);
+
+    expect(response.status).toBe(200);
+    expect(response.body.permissions).toEqual([]);
   });
 });

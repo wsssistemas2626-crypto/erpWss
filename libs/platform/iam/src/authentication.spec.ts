@@ -2,6 +2,7 @@ import { startPostgresTestEnv, type PostgresTestEnv } from '@erp/platform-db/tes
 import { ProblemDetailsFilter, Public } from '@erp/platform-http';
 import { createLogger } from '@erp/platform-observability';
 import { AuditRegistry, AuditService } from '@erp/platform-audit';
+import { ModuleCatalog, TenantModuleService } from '@erp/platform-config';
 import { TenantDb, requireTenantId } from '@erp/platform-tenancy';
 import { withTenantSession } from '@erp/platform-tenancy/testing';
 import { newId, type EntityId } from '@erp/shared-kernel';
@@ -66,6 +67,8 @@ let env: PostgresTestEnv;
 let app: INestApplication;
 let baseUrl: string;
 let syncService: IdentitySyncService;
+let permissionService: PermissionService;
+let tenantModuleService: TenantModuleService;
 
 const discard = new Writable({
   write(_chunk, _encoding, callback) {
@@ -82,6 +85,8 @@ const discard = new Writable({
       useFactory: () => new IdentityRepository(env.appPool, new TenantDb(env.appPool)),
     },
     { provide: IdentitySyncService, useFactory: () => syncService },
+    { provide: PermissionService, useFactory: () => permissionService },
+    { provide: TenantModuleService, useFactory: () => tenantModuleService },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
 })
@@ -132,10 +137,13 @@ beforeAll(async () => {
 
   const tenantDb = new TenantDb(env.appPool);
   const permissionRepository = new PermissionRepository();
-  const permissionService = new PermissionService(tenantDb, permissionRepository);
+  permissionService = new PermissionService(tenantDb, permissionRepository);
   const catalog = new PermissionCatalog();
   catalog.register(PLATFORM_MODULE, PLATFORM_PERMISSIONS);
+  const moduleCatalog = new ModuleCatalog();
+  moduleCatalog.register([{ key: PLATFORM_MODULE, description: 'Administração da plataforma' }]);
   const auditService = new AuditService(tenantDb, new AuditRegistry());
+  tenantModuleService = new TenantModuleService(tenantDb, moduleCatalog, auditService);
   const roleService = new RoleService(
     tenantDb,
     permissionRepository,
@@ -196,6 +204,8 @@ describe('F0-07 token válido com organização ativa', () => {
         status: 'ACTIVE',
       },
       membershipStatus: 'ACTIVE',
+      permissions: [],
+      modules: ['platform'],
     });
   });
 
@@ -230,6 +240,9 @@ describe('F0-07 token sem organização ativa', () => {
     expect(response.status).toBe(200);
     expect(response.body.tenant).toBeNull();
     expect(response.body.membershipStatus).toBeNull();
+    // Sem organização ativa não há o que o usuário possa fazer: o front cai no seletor.
+    expect(response.body.permissions).toEqual([]);
+    expect(response.body.modules).toEqual([]);
   });
 });
 

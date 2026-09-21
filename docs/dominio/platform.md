@@ -57,7 +57,14 @@ Membership removido no Clerk vira `REVOKED` (não apagamos: histórico e auditor
   `Membro de Equipe`, `Financeiro`, `Leitor`.
 
 ### tenant_modules
-(`tenant_id`, `module` text, `enabled` bool). Módulo desabilitado: rotas retornam 404 e menu some.
+(`tenant_id`, `module` text, `enabled` bool), único por (`tenant_id`, `module`). Tem RLS como
+qualquer tabela de negócio.
+
+O catálogo dos módulos que a instalação oferece fica no código (`ModuleCatalog`, preenchido na
+composição da API, como o `PermissionCatalog`): um tenant novo nasce enxergando tudo e esta tabela
+guarda só os desvios — ausência de linha significa habilitado. Módulo desabilitado: rotas retornam
+404 e menu some. `GET /api/v1/me` devolve a lista resultante, e é dela que o front monta o menu
+lateral (F0-13). Habilitar/desabilitar gera registro de auditoria (entidade `tenant_module`).
 
 ### tenant_settings
 (`tenant_id`, `key`, `value jsonb`). Parâmetros por tenant, com schema zod por chave.

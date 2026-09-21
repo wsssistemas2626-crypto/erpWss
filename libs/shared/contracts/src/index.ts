@@ -45,3 +45,12 @@ export {
   type AuditQueryInput,
   type AuditRecordDto,
 } from './audit';
+
+export {
+  meResponseSchema,
+  meTenantSchema,
+  meUserSchema,
+  type MeResponse,
+  type MeTenant,
+  type MeUser,
+} from './me';
