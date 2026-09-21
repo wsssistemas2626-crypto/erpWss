@@ -22,7 +22,7 @@ EM_ANDAMENTO
 - [x] F0-05 — Tenancy e isolamento RLS → fase-0#F0-05 · ADR-001
 - [x] F0-06 — Convenções da API e observabilidade → fase-0#F0-06
 - [x] F0-07 — Verificação de token do Clerk e resolução de tenant → fase-0#F0-07 · ADR-004 · dominio/platform.md
-- [ ] F0-08 — Autorização RBAC → fase-0#F0-08 · ADR-004
+- [x] F0-08 — Autorização RBAC → fase-0#F0-08 · ADR-004
 - [ ] F0-09 — Auditoria → fase-0#F0-09 · dominio/platform.md
 - [ ] F0-10 — Outbox e worker → fase-0#F0-10 · ADR-003
 - [ ] F0-11 — Sincronização Clerk: webhooks e JIT → fase-0#F0-11 · ADR-004
@@ -413,3 +413,45 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
 - O guard ainda não checa permissão nenhuma: `@RequirePermission` e o RBAC são o F0-08.
 - `/api/docs` fica fora do guard (o Swagger registra rotas Express, não rotas do Nest). Em produção
   isso expõe a documentação sem autenticação — decidir no F0-15 se fecha por ambiente.
+
+### 2026-09-21 — F0-08 Autorização (RBAC)
+
+**Feito**
+- Tabelas `platform.roles`, `platform.role_permissions` e `platform.membership_roles`, as três com
+  `tenant_id` e RLS: o conjunto de papéis de um tenant não é visto nem alterado por outro.
+- `@RequirePermission('<modulo>.<recurso>.<acao>')` e `PermissionGuard` global, rodando depois do
+  `AuthGuard` — autenticar antes de autorizar.
+- `PermissionCatalog` com `registerPermissions` por módulo, validando o formato da chave, o prefixo
+  do módulo e a duplicidade.
+- `PermissionService`: permissões do banco (nunca do token, ADR-004) com cache de 60 s, invalidado
+  na hora por qualquer mutação de papel ou de atribuição.
+- `RoleService` + `RolesController`: CRUD de papéis com concorrência otimista (409), proteção dos
+  papéis do sistema e atribuição de papéis a membros.
+- Semeadura dos seis papéis de `docs/dominio/platform.md`, idempotente, pronta para o F0-11.
+- Teste de arquitetura novo em `tools/architecture`: varre os `*.controller.ts` com a API do
+  TypeScript e reprova rota de escrita sem `@RequirePermission` nem `@Public`, apontando
+  arquivo, linha, classe e método.
+- 37 testes em `platform-iam` e 16 em `architecture`.
+
+**Decisões menores**
+- O teste do cenário 2 é **análise estática do fonte**, não de runtime: o que se quer pegar é o
+  decorator esquecido, e uma rota esquecida não aparece em teste nenhum — ela simplesmente responde
+  a quem não devia.
+- Rota de **leitura** sem `@RequirePermission` continua valendo (basta estar autenticado no tenant);
+  só escrita é obrigada a declarar. É o que o cenário Gherkin pede e evita decorator cerimonial em
+  todo GET. Quando a Fase 1 trouxer leitura sensível, a permissão entra explicitamente.
+- `invalidateTenant` derruba o cache do tenant inteiro, e não só do membership alterado: mexer num
+  papel muda as permissões de todos que o têm, e descobrir quem são custa mais do que recarregar.
+- `Administrador` recebe todas as permissões do catálogo no momento da semeadura. Os outros cinco
+  papéis recebem o que cada módulo declarar em `defaultRoles` — hoje, nada, porque só a plataforma
+  registrou permissões e administrar papéis é administração. A Fase 1 preenche.
+- Permissão fora do catálogo é recusada com `PERMISSION_UNKNOWN` em vez de aceita: quase sempre é
+  erro de digitação, e aceitar criaria um papel que nunca autoriza nada.
+- `PUT` em vez de `PATCH` para alterar papel: a atualização substitui o conjunto de permissões.
+
+**Pendências**
+- O cache de permissões é por processo. Com mais de uma instância da API, a invalidação não
+  atravessa — o TTL de 60 s limita a janela. Se virar problema, a saída natural é publicar a
+  invalidação pelo outbox (F0-10).
+- `role_permissions` e `membership_roles` não têm `created_at`/`created_by`: são tabelas de ligação
+  e quem registra a mudança é a auditoria (F0-09).

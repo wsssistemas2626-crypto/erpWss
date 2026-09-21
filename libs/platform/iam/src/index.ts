@@ -29,8 +29,10 @@ export {
 } from './auth-context';
 
 export {
+  AUTH_FORBIDDEN,
   AUTH_INVALID_TOKEN,
   AUTH_USER_NOT_PROVISIONED,
+  AuthForbiddenError,
   AuthInvalidTokenError,
   IAM_ERROR_STATUS,
   TENANT_ACCESS_REVOKED,
@@ -48,6 +50,21 @@ export { IdentityRepository, type MembershipRecord } from './infra/identity-repo
 export { memberships, membershipStatus, users, userStatus } from './infra/schema';
 
 export { AuthGuard } from './http/auth.guard';
+export { PermissionGuard } from './http/permission.guard';
+export { RolesController } from './http/roles.controller';
+export { REQUIRED_PERMISSION, RequirePermission } from './http/require-permission.decorator';
+
+export {
+  PERMISSION_CATALOG,
+  PERMISSION_KEY,
+  PermissionCatalog,
+  type PermissionDefinition,
+} from './rbac/permission-catalog';
+export { PermissionRepository, type RoleRecord } from './rbac/permission-repository';
+export { PERMISSION_CACHE_TTL_MS, PermissionService } from './rbac/permission-service';
+export { PLATFORM_MODULE, PLATFORM_PERMISSIONS } from './rbac/platform-permissions';
+export { PERMISSION_UNKNOWN, ROLE_IS_SYSTEM, RoleService } from './rbac/role-service';
+export { ADMINISTRATOR_ROLE, SYSTEM_ROLES, type SystemRoleDefinition } from './rbac/system-roles';
 export { AuthenticationMiddleware } from './http/authentication.middleware';
 export { MeController, type MeResponse } from './http/me.controller';
 export {

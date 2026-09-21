@@ -23,3 +23,17 @@ export {
 } from './problem';
 
 export { versionSchema, versionedSchema, withVersion } from './concurrency';
+
+export {
+  assignRolesSchema,
+  createRoleSchema,
+  permissionDefinitionSchema,
+  permissionKeySchema,
+  roleNameSchema,
+  roleSchema,
+  updateRoleSchema,
+  type AssignRoles,
+  type CreateRole,
+  type Role,
+  type UpdateRole,
+} from './roles';

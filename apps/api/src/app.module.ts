@@ -8,6 +8,15 @@ import {
   IDENTITY_PROVIDER,
   IdentityRepository,
   MeController,
+  PERMISSION_CATALOG,
+  PLATFORM_MODULE,
+  PLATFORM_PERMISSIONS,
+  PermissionCatalog,
+  PermissionGuard,
+  PermissionRepository,
+  PermissionService,
+  RoleService,
+  RolesController,
   type IdentityProvider,
 } from '@erp/platform-iam';
 import { TenantDb } from '@erp/platform-tenancy';
@@ -40,7 +49,7 @@ export class AppModule implements NestModule {
   static forRoot(env: ApiEnv, overrides: AppModuleOverrides = {}): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, MeController],
+      controllers: [HealthController, MeController, RolesController],
       providers: [
         { provide: API_ENV, useValue: env },
         {
@@ -69,11 +78,52 @@ export class AppModule implements NestModule {
             new IdentityRepository(pool, tenantDb),
           inject: [DB_POOL, TenantDb],
         },
+        {
+          provide: PERMISSION_CATALOG,
+          useFactory: (): PermissionCatalog => {
+            const catalog = new PermissionCatalog();
+            catalog.register(PLATFORM_MODULE, PLATFORM_PERMISSIONS);
+            // Cada módulo de negócio registra as suas aqui, a partir da Fase 1.
+            return catalog;
+          },
+        },
+        {
+          provide: PermissionRepository,
+          useFactory: (tenantDb: TenantDb): PermissionRepository =>
+            new PermissionRepository(tenantDb),
+          inject: [TenantDb],
+        },
+        {
+          provide: PermissionService,
+          useFactory: (repository: PermissionRepository): PermissionService =>
+            new PermissionService(repository),
+          inject: [PermissionRepository],
+        },
+        {
+          provide: RoleService,
+          useFactory: (
+            repository: PermissionRepository,
+            permissions: PermissionService,
+            catalog: PermissionCatalog,
+          ): RoleService => new RoleService(repository, permissions, catalog),
+          inject: [PermissionRepository, PermissionService, PERMISSION_CATALOG],
+        },
+        // A ordem é a da execução: autenticar antes de autorizar.
         // Nega por padrão: rota sem @Public exige token válido (ADR-004).
         { provide: APP_GUARD, useClass: AuthGuard },
+        { provide: APP_GUARD, useClass: PermissionGuard },
         DbPoolLifecycle,
       ],
-      exports: [DB_POOL, TenantDb, API_ENV, IDENTITY_PROVIDER, IdentityRepository],
+      exports: [
+        DB_POOL,
+        TenantDb,
+        API_ENV,
+        IDENTITY_PROVIDER,
+        IdentityRepository,
+        PERMISSION_CATALOG,
+        PermissionService,
+        RoleService,
+      ],
     };
   }
 

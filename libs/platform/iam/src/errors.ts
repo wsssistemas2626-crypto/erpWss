@@ -10,6 +10,7 @@ export const TENANT_NOT_SELECTED = 'TENANT_NOT_SELECTED';
 export const TENANT_NOT_PROVISIONED = 'TENANT_NOT_PROVISIONED';
 export const TENANT_ACCESS_REVOKED = 'TENANT_ACCESS_REVOKED';
 export const TENANT_INACTIVE = 'TENANT_INACTIVE';
+export const AUTH_FORBIDDEN = 'AUTH_FORBIDDEN';
 
 export class AuthInvalidTokenError extends DomainError {
   constructor(reason?: string) {
@@ -57,6 +58,13 @@ export class TenantInactiveError extends DomainError {
   }
 }
 
+export class AuthForbiddenError extends DomainError {
+  constructor(permission: string) {
+    super(AUTH_FORBIDDEN, 'Você não tem permissão para esta ação.', { permission });
+    this.name = 'AuthForbiddenError';
+  }
+}
+
 /** Status HTTP dos códigos desta lib, entregue ao `ProblemDetailsFilter` na composição. */
 export const IAM_ERROR_STATUS: Readonly<Record<string, number>> = {
   [AUTH_INVALID_TOKEN]: 401,
@@ -65,4 +73,5 @@ export const IAM_ERROR_STATUS: Readonly<Record<string, number>> = {
   [TENANT_NOT_PROVISIONED]: 403,
   [TENANT_ACCESS_REVOKED]: 403,
   [TENANT_INACTIVE]: 403,
+  [AUTH_FORBIDDEN]: 403,
 };
