@@ -1,0 +1,34 @@
+{
+  "name": "web-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/web-e2e/src",
+  "implicitDependencies": ["api", "worker", "web"],
+  "tags": ["type:app", "scope:e2e"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "eslint apps/web-e2e --max-warnings 0"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsc -p apps/web-e2e/tsconfig.json --noEmit"
+      }
+    },
+    "e2e": {
+      "executor": "nx:run-commands",
+      "options": {
+        "parallel": false,
+        "commands": [
+          "docker compose up -d --wait",
+          "pnpm db:migrate",
+          "nx run-many -t build -p api worker",
+          "playwright test -c apps/web-e2e/playwright.config.ts"
+        ]
+      }
+    }
+  }
+}

@@ -1,7 +1,28 @@
 # PROGRESS
 
 ## Status
-EM_ANDAMENTO
+TAREFA_BLOQUEADA
+
+O F0-14 exige o Clerk de desenvolvimento de verdade e o `.env` ainda está com os valores de
+exemplo em três variáveis. Nenhuma delas o agente pode preencher:
+
+- `E2E_CLERK_USER_EMAIL` e `E2E_CLERK_USER_PASSWORD` — continuam iguais ao `.env.example`
+  (`e2e+clerk_test@example.com` / `troque-esta-senha`). A instância de desenvolvimento
+  (`app_3JdisYmzXgGLw4l1bhicBekMrMX`) está **vazia**: zero usuários e zero organizações. Criar o
+  usuário e a organização de teste e escolher a senha é decisão humana, e escrever segredo no
+  `.env` o agente não faz (CLAUDE.md §6.1).
+- `CLERK_JWT_KEY` — ainda é o `-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----` do
+  exemplo. Sem a chave pública JWKS real a API aceita subir, mas não verifica token nenhum.
+
+**Para desbloquear** (README §"Pré-requisitos humanos", passos 5 a 7): no Dashboard do Clerk,
+instância *Development*, crie uma organização de teste e um usuário de teste membro dela como
+`admin` (e-mail com sufixo `+clerk_test`), copie a JWT public key de **API keys** e preencha as
+três variáveis no `.env` da raiz. Depois disso, `pnpm e2e` roda inteiro e falta só trocar o
+script `verify` para `pnpm check && pnpm e2e` (último critério de aceite do item, deixado para
+quando a suíte puder de fato passar — flipar agora deixaria o `CHECK_CMD` do autoloop vermelho
+por falta de credencial, não por defeito de código).
+
+O resto do F0-14 está entregue e verificado: ver o log abaixo.
 
 ## Instruções fixas
 - Leia o `CLAUDE.md` antes de qualquer coisa.
@@ -742,3 +763,73 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
 - As chaves do Clerk `CLERK_JWT_KEY`, `CLERK_WEBHOOK_SIGNING_SECRET`,
   `CLERK_AUTHORIZED_PARTIES` e `E2E_CLERK_USER_EMAIL`/`E2E_CLERK_USER_PASSWORD` continuam
   com valores de teste — bloqueiam o E2E do F0-14, como já registrado no F0-12.
+
+### 2026-09-21 — F0-14 Infraestrutura E2E e `pnpm verify` completo — TAREFA_BLOQUEADA
+
+**Feito**
+- `apps/web-e2e` criado (`type:app`, `scope:e2e`), com alvos `lint`, `typecheck` e `e2e`. Sem alvo
+  `test`: a suíte Playwright não pode entrar no `pnpm check`, que por contrato não acessa a rede.
+- `playwright.config.ts`: Chromium, `locale: pt-BR`, fuso `America/Sao_Paulo`, `workers: 1`,
+  `trace: 'on-first-retry'`. O alvo `e2e` prepara o terreno em sequência — `docker compose up -d
+  --wait`, `pnpm db:migrate`, `nx run-many -t build -p api worker` — e só então chama o Playwright.
+- `globalSetup`: `clerkSetup` (testing token da instância de desenvolvimento) → `pnpm cli dev:seed`
+  → worker como processo filho. Devolve a função de teardown que o Playwright chama no fim.
+- Fixture `test` própria: toda página nasce com `setupClerkTestingToken`; a fixture `signIn` entra
+  com `clerk.signIn` por `E2E_CLERK_USER_EMAIL`/`E2E_CLERK_USER_PASSWORD`.
+- `expectNoSeriousAccessibilityViolations`: axe-core em cada página visitada, reprovando `serious`
+  e `critical`.
+- Os dois cenários Gherkin da story viraram teste em `src/sign-in.spec.ts`.
+- `src/support/e2e-env.ts` valida com zod as variáveis do E2E **antes** de subir qualquer processo,
+  e recusa também os valores de exemplo do `.env.example` — é o que produz a mensagem que
+  identificou o bloqueio deste item.
+- `pnpm e2e` deixou de ser o `echo ... && exit 1` e passou a ser `nx e2e web-e2e`.
+- README: seção "Testes E2E" e dois passos novos nos pré-requisitos humanos do Clerk.
+- Correção em `apps/worker/src/main.ts`: o `enableShutdownHooks()` do Nest trata o sinal,
+  desregistra o próprio ouvinte e **reemite** o sinal; o nosso ouvinte rodava de novo e todo
+  encerramento limpo terminava em `Called end on pool more than once`. Uma trava de reentrância
+  resolve. Apareceu porque o teardown do E2E manda SIGTERM no worker — era ruído garantido em
+  todo run e no CI do F0-15.
+
+**Verificado de verdade** (o que dá para verificar sem o usuário de teste do Clerk)
+- `pnpm check`: passa, 68 tarefas em 23 projetos (eram 66/22).
+- `docker compose up -d --wait` → `pnpm db:migrate` → build de `api` e `worker`: passa.
+- API compilada sobe e `GET /api/v1/ready` responde 200 — é a URL que o `webServer` sonda.
+- Worker compilado sobe e encerra limpo no SIGTERM, sem erro no log (correção acima).
+- Com o Vite no ar e `clerkSetup` contra a instância real, o cenário "redireciona para /entrar quem
+  acessa sem sessão" **passa**, incluindo a varredura do axe. Ou seja: `webServer`, testing token,
+  navegação, redirecionamento e acessibilidade estão exercitados de ponta a ponta.
+- O cenário do fluxo de entrada é o único que não roda, e só por falta do usuário de teste.
+
+**Decisões menores**
+- O worker sobe no `globalSetup`, e não no `webServer`: o `webServer` do Playwright só sabe esperar
+  por uma URL, e o worker é consumidor de pg-boss — não escuta porta nenhuma.
+- API e worker rodam **compilados** no E2E, não por `tsx`: o Nest depende de
+  `emitDecoratorMetadata`, que os transpiladores rápidos não emitem. É por isso que o `pnpm cli`
+  (que monta os serviços com `new`, sem DI) pode usar `tsx` e a API não.
+- Front pelo servidor de desenvolvimento do Vite, que já tem o proxy de `/api` configurado no
+  F0-13. Um `vite preview` exigiria duplicar o proxy sem ganho de fidelidade relevante.
+- Só `serious` e `critical` do axe reprovam. `minor`/`moderate` viram ruído de suíte e acabam
+  ignorados em bloco, que é pior do que não medir.
+- `.cl-footer` fica fora da varredura do axe. Numa instância de desenvolvimento — a única que o
+  ADR-004 permite ao E2E — o rodapé do cartão do Clerk traz o selo "Secured by Clerk", que reprova
+  no contraste (3.04:1, `#6b3b20` sobre `#f36b16`). É branding do fornecedor, com classes geradas
+  (`cl-internal-<hash>`), e não existe na instância de produção. Confirmado que é a **única**
+  violação grave: as nossas páginas (`/401`, 404) passam limpas.
+- O teste do cabeçalho compara o nome que o `<OrganizationSwitcher/>` mostra (sessão do Clerk) com
+  o texto do cabeçalho (`me.data.tenant.name`, tenant local resolvido pelo `o.id`). Exigir que
+  coincidam prova que os dois lados falam da mesma organização, sem fixar nome de organização no
+  código nem inventar variável de ambiente nova.
+- `E2E_WEB_PORT` é opcional, com 5173 de padrão: não entrou no `.env.example` para não engordar o
+  contrato de variáveis do CLAUDE.md §6.1 com algo que tem padrão.
+- Dependências novas, todas de teste: `@playwright/test`, `@clerk/testing` (previsto no CLAUDE.md
+  §3) e `@axe-core/playwright` (exigido pelo critério de acessibilidade da story).
+
+**Pendências**
+- As três variáveis do bloqueio (ver Status). Enquanto não vierem, `pnpm e2e` para na validação
+  dizendo exatamente qual falta.
+- `verify` continua sendo `pnpm check`. Vira `pnpm check && pnpm e2e` na rodada que fechar o item,
+  junto com o `[x]` — é o único critério de aceite ainda em aberto além do bloqueio.
+- `CLERK_WEBHOOK_SIGNING_SECRET` segue como `whsec_xxx`. Não bloqueia o E2E (o webhook não é
+  exercitado por ele), mas segue pendente desde o F0-11 para testar o webhook localmente.
+- `npx playwright install --with-deps chromium` é passo manual de primeiro uso, documentado no
+  README. O F0-15 precisa fazê-lo no CI.

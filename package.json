@@ -11,7 +11,7 @@
     "verify": "pnpm check",
     "dev": "nx run-many -t serve -p api worker web --parallel=3",
     "build": "nx run-many -t build",
-    "e2e": "echo 'E2E ainda nao configurado: ver item F0-14 do PROGRESS.md' && exit 1",
+    "e2e": "nx e2e web-e2e",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:migrate": "tsx libs/platform/db/src/infra/migrate-cli.ts",
@@ -20,9 +20,12 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@clerk/testing": "^2.2.36",
     "@eslint-community/eslint-plugin-eslint-comments": "^4.8.1",
     "@eslint/js": "^10.0.0",
     "@nx/eslint-plugin": "^23.2.1",
+    "@playwright/test": "^1.63.0",
     "@swc/core": "^1.16.2",
     "@tailwindcss/vite": "^4.3.3",
     "@testcontainers/postgresql": "^12.1.0",

@@ -49,7 +49,7 @@ pnpm verify
 | `pnpm db:up` / `pnpm db:down` | sobe/derruba o PostgreSQL 16 local (docker compose) |
 | `pnpm db:migrate` | cria as roles e aplica as migrations de todos os módulos |
 | `pnpm cli dev:seed` | copia do Clerk de desenvolvimento o usuário de teste e as organizações dele para o banco local |
-| `pnpm e2e` | testes Playwright (configurados no item F0-14) |
+| `pnpm e2e` | testes Playwright: sobe Postgres, aplica migrations, compila `api`/`worker` e roda a suíte |
 | `pnpm format` | Prettier em todo o repositório |
 
 A API sobe em `http://localhost:${API_PORT}/api/v1` (health em `/api/v1/health`) e o front em
@@ -78,6 +78,28 @@ plataforma primeiro, depois os módulos em ordem alfabética. O que já rodou fi
 Os testes de integração sobem um Postgres real com Testcontainers
 (`startPostgresTestEnv()` em `@erp/platform-db/testing`) e rodam dentro do `pnpm check`,
 por isso o Docker é obrigatório para rodar os testes.
+
+### Testes E2E
+
+`apps/web-e2e` roda a suíte Playwright contra o sistema inteiro: Postgres do compose, `api` e
+`worker` compilados, front servido pelo Vite e a instância de **desenvolvimento** do Clerk.
+
+```bash
+pnpm e2e
+```
+
+O alvo faz, nesta ordem: `docker compose up -d --wait`, `pnpm db:migrate`, build de `api` e
+`worker` e, então, `playwright test`. O `globalSetup` obtém o *testing token* do Clerk
+(`clerkSetup`), roda `pnpm cli dev:seed` e sobe o worker; cada teste instala o testing token na
+página (`setupClerkTestingToken`), sem o qual o login automatizado esbarra na proteção antirrobô.
+Toda página visitada passa pelo axe-core e reprova com violação `serious` ou `critical`.
+
+Da primeira vez, instale o navegador: `npx playwright install --with-deps chromium`.
+
+É o único teste do repositório que acessa a rede — o `pnpm check` usa o `FakeIdentityProvider`
+(ADR-004). Ele exige no `.env` `CLERK_JWT_KEY`, `CLERK_SECRET_KEY`, `VITE_CLERK_PUBLISHABLE_KEY`,
+`E2E_CLERK_USER_EMAIL` e `E2E_CLERK_USER_PASSWORD` com valores reais: com os valores de exemplo a
+suíte para antes de subir qualquer processo, dizendo qual variável falta.
 
 ### Convenções da API
 
@@ -135,7 +157,10 @@ Aplicação Clerk do projeto: `app_3JdisYmzXgGLw4l1bhicBekMrMX`
 5. Crie uma organização de teste e um usuário de teste membro dela, com papel `admin`.
    Um e-mail com sufixo `+clerk_test` (ex.: `voce+clerk_test@example.com`) facilita a verificação em desenvolvimento.
 6. Em **API keys**, copie a publishable key, a secret key e a JWT public key para o `.env`.
-7. Webhooks (opcional em desenvolvimento): o sistema funciona sem eles graças ao provisionamento sob demanda.
+   A JWT public key (`CLERK_JWT_KEY`) é o que torna a verificação do token networkless: sem ela a API não sobe.
+7. Coloque no `.env` o e-mail e a senha do usuário de teste do passo 5 (`E2E_CLERK_USER_EMAIL` e
+   `E2E_CLERK_USER_PASSWORD`). É com eles que o E2E entra no sistema.
+8. Webhooks (opcional em desenvolvimento): o sistema funciona sem eles graças ao provisionamento sob demanda.
    Para testá-los localmente, é preciso um túnel (ex.: ngrok) apontando para `/api/v1/webhooks/clerk`.
 
 ### 2. GitHub

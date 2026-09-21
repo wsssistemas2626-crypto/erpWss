@@ -30,7 +30,16 @@ async function bootstrap(): Promise<void> {
   await worker.start();
   logger.info({ worker: env.WORKER_NAME }, 'worker iniciado');
 
+  // O `enableShutdownHooks()` do Nest trata o sinal, desregistra o próprio ouvinte e
+  // reemite o sinal para que o comportamento padrão valha. O nosso ouvinte continua no
+  // ar e é chamado de novo: sem esta trava, `platformPool.end()` roda duas vezes e todo
+  // encerramento limpo termina com "Called end on pool more than once" no log.
+  let shuttingDown = false;
   const shutdown = (signal: string): void => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
     logger.info({ signal }, 'encerrando o worker');
     void worker
       .stop()
