@@ -15,7 +15,7 @@ EM_ANDAMENTO
 ## Backlog
 
 ### Fase 0 — Fundação (`docs/backlog/fase-0-fundacao.md`)
-- [ ] F0-01 — Scaffold do monorepo → fase-0#F0-01
+- [x] F0-01 — Scaffold do monorepo → fase-0#F0-01
 - [ ] F0-02 — Estrutura de libs e fronteiras → fase-0#F0-02 · ADR-002
 - [ ] F0-03 — Banco, roles e migrations → fase-0#F0-03 · ADR-001
 - [ ] F0-04 — Shared kernel (Money, ids, erros, CPF/CNPJ) → fase-0#F0-04 · ADR-005
@@ -61,3 +61,42 @@ EM_ANDAMENTO
 
 ## Log de decisões
 (uma entrada por rodada: data, item, o que foi feito, decisões menores, pendências)
+
+### 2026-09-21 — F0-01 Scaffold do monorepo
+
+**Feito**
+- Workspace Nx 23 + pnpm (monorepo integrado: dependências no `package.json` da raiz).
+- Apps `api` (NestJS 12, prefixo `/api/v1`, `GET /api/v1/health`), `worker` (NestJS standalone,
+  `WorkerService` onde os consumidores de fila entram no F0-10) e `web` (React 19 + Vite 8).
+- `tsconfig.base.json` com `strict` e `noUncheckedIndexedAccess`; ESLint 10 (flat config) + Prettier;
+  Vitest 5 em todos os projetos. Alvos `build`, `serve`, `lint`, `typecheck` e `test` em cada `project.json`.
+- Carregamento de `.env` (dotenv) validado com zod no boot de `api` e `worker`, com erro listando as
+  variáveis ausentes. 10 testes passando (4 api, 5 worker, 1 web).
+- `.nvmrc` (Node 24 LTS), seção "Desenvolvimento" no README, `.env.example` atualizado.
+- `pnpm verify` (= `pnpm check`) passa; `pnpm build` e `pnpm dev` verificados manualmente
+  (health respondeu `{"status":"ok"}`, web respondeu 200, worker subiu).
+
+**Decisões menores**
+- Alvos Nx via `nx:run-commands` chamando as ferramentas diretamente (`tsc`, `eslint`, `vitest`, `vite`)
+  em vez dos executores `@nx/*`: menos acoplamento a peer deps de plugins, e o comando de cada alvo
+  fica explícito no `project.json`.
+- Vitest dos apps NestJS usa `unplugin-swc` + `@swc/core`: o esbuild do Vite não implementa
+  `emitDecoratorMetadata`, do qual a injeção de dependências do Nest depende. Sem isso todo teste de
+  caso de uso com DI por construtor quebraria a partir do F0-05.
+- `env.ts` está duplicado em `apps/api` e `apps/worker`. **Pendência:** unificar em
+  `libs/platform/config` no F0-02.
+- Variáveis novas no `.env.example`: `NODE_ENV`, `LOG_LEVEL` (ambas com padrão) e `WORKER_NAME`
+  (obrigatória no worker). `API_PORT` continua obrigatória na api — é ela que exercita a falha clara.
+- Mensagens de erro de boot em pt-BR (são para o operador); identificadores e código em inglês.
+- Textos de UI do web em `apps/web/src/messages.ts`, nenhuma string solta no componente;
+  o F0-13 troca esse módulo pelo react-i18next.
+- `pnpm e2e` sai com erro apontando o F0-14, em vez de fingir sucesso sem suíte.
+- Prettier não formata `*.md` (`.prettierignore`), para não reescrever a documentação do kit.
+- pnpm 12 usa `allowBuilds` no `pnpm-workspace.yaml`: liberados `@swc/core` e `nx`. `unplugin-swc@2.0.0`
+  precisou de `minimumReleaseAgeExclude`.
+- `apps/web/vite.config.mts` (e não `.ts`) para o carregador nativo de config do Vite 8 não avisar
+  sobre ESM em arquivo tratado como CommonJS.
+
+**Pendências**
+- Nenhuma bloqueante. `libs/`, tags e `@nx/enforce-module-boundaries` são o F0-02; cobertura mínima
+  de 80% passa a valer quando existirem `domain/` e `application/` (F0-04 em diante).

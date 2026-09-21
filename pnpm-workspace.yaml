@@ -1,0 +1,10 @@
+# Monorepo integrado (Nx): as dependências vivem no package.json da raiz.
+# Este arquivo fixa as configuracoes do pnpm do workspace.
+allowBuilds:
+  '@swc/core': true
+  nx: true
+
+# unplugin-swc é mais novo que o minimumReleaseAge padrão do pnpm; liberado
+# explicitamente para que a instalacao seja reproduzível.
+minimumReleaseAgeExclude:
+  - unplugin-swc@2.0.0

@@ -2,8 +2,9 @@
 
 Repositório: https://github.com/wsssistemas2626-crypto/erpWss
 
-Este repositório começa só com documentação. O código é construído pelo Claude Code,
-item a item, a partir do `PROGRESS.md`.
+O código é construído pelo Claude Code, item a item, a partir do `PROGRESS.md`.
+A base do monorepo (Nx + pnpm, apps `api`, `worker` e `web`) já está no repositório — ver
+"Desenvolvimento" abaixo.
 
 ## Conteúdo
 
@@ -21,6 +22,40 @@ item a item, a partir do `PROGRESS.md`.
 | `docs/adr/` | Decisões arquiteturais (ADR-001 a ADR-007) |
 | `docs/dominio/` | Modelos de dados de plataforma, cadastros e projetos |
 | `docs/backlog/` | Stories com critérios de aceite (Fases 0 e 1) e roadmap (Fases 2 a 4) |
+| `apps/` | `api` (NestJS), `worker` (NestJS standalone) e `web` (React + Vite) |
+| `libs/` | Libs de domínio, plataforma e compartilhadas (criadas a partir do item F0-02) |
+
+## Desenvolvimento
+
+### Requisitos
+- Node LTS (versão em `.nvmrc`; use `nvm use` se tiver o nvm)
+- pnpm via corepack: `corepack enable`
+- Docker (para Testcontainers e para o Postgres local, a partir do item F0-03)
+
+### Primeiro uso
+```bash
+pnpm install
+cp .env.example .env   # preencha os valores; sem as variáveis obrigatórias os processos não sobem
+pnpm verify
+```
+
+### Comandos
+| Comando | Uso |
+|---|---|
+| `pnpm check` | `nx run-many -t lint typecheck test` — lint, typecheck e testes de todos os projetos |
+| `pnpm verify` | critério de pronto e `CHECK_CMD` do autoloop (igual a `check` até o item F0-14, depois inclui o E2E) |
+| `pnpm dev` | sobe `api`, `worker` e `web` em paralelo |
+| `pnpm build` | build de todos os projetos em `dist/` |
+| `pnpm e2e` | testes Playwright (configurados no item F0-14) |
+| `pnpm format` | Prettier em todo o repositório |
+
+A API sobe em `http://localhost:${API_PORT}/api/v1` (health em `/api/v1/health`) e o front em
+`http://localhost:5173`.
+
+### Estrutura de um projeto
+Cada app tem `project.json` (alvos Nx: `build`, `serve`, `lint`, `typecheck`, `test`),
+`tsconfig.json` (typecheck, inclui os testes), `tsconfig.app.json` (build) e configuração do Vitest.
+As dependências ficam todas no `package.json` da raiz (monorepo integrado do Nx).
 
 ## Pré-requisitos humanos (antes de rodar o loop)
 

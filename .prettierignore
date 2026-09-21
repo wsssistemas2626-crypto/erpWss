@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+.nx/
+pnpm-lock.yaml
+playwright-report/
+test-results/
+
+# A documentação é escrita à mão; o Prettier não formata markdown neste repositório.
+*.md
