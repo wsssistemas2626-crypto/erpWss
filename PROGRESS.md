@@ -18,7 +18,7 @@ EM_ANDAMENTO
 - [x] F0-01 — Scaffold do monorepo → fase-0#F0-01
 - [x] F0-02 — Estrutura de libs e fronteiras → fase-0#F0-02 · ADR-002
 - [x] F0-03 — Banco, roles e migrations → fase-0#F0-03 · ADR-001
-- [ ] F0-04 — Shared kernel (Money, ids, erros, CPF/CNPJ) → fase-0#F0-04 · ADR-005
+- [x] F0-04 — Shared kernel (Money, ids, erros, CPF/CNPJ) → fase-0#F0-04 · ADR-005
 - [ ] F0-05 — Tenancy e isolamento RLS → fase-0#F0-05 · ADR-001
 - [ ] F0-06 — Convenções da API e observabilidade → fase-0#F0-06
 - [ ] F0-07 — Verificação de token do Clerk e resolução de tenant → fase-0#F0-07 · ADR-004 · dominio/platform.md
@@ -196,3 +196,46 @@ EM_ANDAMENTO
 - Continua valendo a pendência de empacotamento registrada no F0-02 (build e runtime dos apps de
   backend não resolvem os aliases `@erp/*`). Este item não esbarrou nela porque `pnpm db:migrate`
   roda por `tsx` e os testes rodam pelo Vitest.
+
+### 2026-09-21 — F0-04 Shared kernel
+
+**Feito**
+- `libs/shared/kernel` com `Money`, `Quantity` e `Percentage` (ADR-005) sobre decimal.js, imutáveis
+  e com estado privado — o que os torna nominais em TypeScript, então `number` não entra onde se
+  espera `Money`.
+- `newId()` (uuid v7), `isEntityId()`, `Result<T,E>` com `ok`/`err`/`map`/`unwrap`,
+  `DomainError` (com `code` estável em inglês e `details`), `Clock` com `SystemClock` e `FixedClock`.
+- Validadores de CPF e CNPJ: `isValid*`, `normalize*`, `format*`, `parse*` (devolvendo `Result`)
+  e `cnpjRoot()`.
+- 60 testes, cobrindo os 5 cenários Gherkin da story e os casos de borda de cada valor.
+- Glossário atualizado com os 9 termos novos, conforme a regra do próprio `docs/03-glossario.md`.
+
+**Decisões menores**
+- Cada grandeza guarda a escala do banco: `Money` 4 casas (`numeric(19,4)`), `Quantity` 6
+  (`numeric(19,6)`), `Percentage` 4 (`numeric(9,4)`). `toString()` devolve sempre a forma canônica
+  (`"1234.5600"`), que é o que trafega na API e vai para o banco; o arredondamento para centavos é
+  explícito (`round(2)`/`toFixed(2)`) e meia-par.
+- **Rateio chama-se `apportion`, não `allocate`**: o glossário já usa *allocation* para o percentual
+  de dedicação de um membro de equipe. `apportionment` entrou no glossário.
+- Entrada só por `string`, e só decimal literal: `1e3`, `"R$ 10,00"`, `" 10.00 "` e `NaN` são
+  recusados com `MONEY_INVALID_AMOUNT`. Valor vindo de JSON ou do banco nunca tem essas formas, então
+  recusar cedo é melhor que arredondar um bug.
+- O `decimal.js` é **clonado** (`Decimal.clone`) em vez de usado global: qualquer dependência que
+  mexesse na configuração global mudaria silenciosamente um cálculo financeiro.
+- `Money.equals` com moedas diferentes devolve `false` em vez de lançar — é predicado total. Já
+  `plus`, `minus` e `compare` lançam `MONEY_CURRENCY_MISMATCH`, como manda o cenário da story.
+- Validação de faixa (`MONEY_OUT_OF_RANGE`, `QUANTITY_OUT_OF_RANGE`, `PERCENTAGE_OUT_OF_RANGE`):
+  o valor é recusado no domínio se não couber no `numeric` correspondente, em vez de estourar no
+  `INSERT`.
+- `Percentage.of('10.5')` é 10,5% — o número que o usuário lê. A fração (0,105) sai por
+  `asFraction()`, usada internamente por `Money.applyPercentage`.
+- Dependências novas: `decimal.js` (ADR-005) e `uuid` (v7; o `crypto.randomUUID()` do Node só faz v4).
+
+**Pendências**
+- **CNPJ alfanumérico.** A validação implementada é a numérica clássica (módulo 11 sobre 14 dígitos).
+  O CNPJ alfanumérico entra em vigor no Brasil em 2026 e usa o valor ASCII dos caracteres no cálculo
+  do DV. A story e `docs/dominio/cadastros.md` (`cnpj char(14)`, "só dígitos") descrevem o formato
+  numérico, então não estendi por conta própria — mas isso precisa de decisão antes do F1-01
+  (Empresas e filiais), porque muda o tipo da coluna e a validação.
+- Cobertura mínima de 80% ainda não é medida: não há `domain/` nem `application/` no repositório e
+  o `@vitest/coverage-v8` não foi instalado. Vale ligar no primeiro item que criar `domain/`.

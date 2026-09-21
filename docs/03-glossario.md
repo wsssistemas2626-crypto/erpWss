@@ -63,3 +63,12 @@ adicione-o aqui na mesma rodada e registre no log.
 | Título a receber / pagar | receivable / payable | Obrigações financeiras |
 | Contrato | contract | Acordo comercial com cliente |
 | Nota fiscal | fiscal document | NF-e, NFS-e etc. |
+| CPF | cpf | Identificador fiscal de pessoa física: 11 dígitos com dígitos verificadores |
+| CNPJ | cnpj | Identificador fiscal de pessoa jurídica: 14 dígitos com dígitos verificadores |
+| Raiz do CNPJ | cnpj root | Os 8 primeiros dígitos do CNPJ; filiais da mesma empresa compartilham |
+| Documento (CPF ou CNPJ) | document | Campo do parceiro: CPF (11) ou CNPJ (14), só dígitos |
+| Dinheiro / valor monetário | money | Valor + moeda, imutável, decimal (ADR-005) |
+| Quantidade | quantity | Grandeza fracionária: horas, peso, volume (ADR-005) |
+| Percentual | percentage | Percentual como o usuário lê: 10,5% é `Percentage.of('10.5')` (ADR-005) |
+| Rateio | apportionment | Divisão de um valor entre partes, com maior resto para a soma fechar (ADR-005) |
+| Relógio | clock | Fonte de tempo injetável; `FixedClock` nos testes |
