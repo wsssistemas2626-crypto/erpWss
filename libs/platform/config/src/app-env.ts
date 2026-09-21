@@ -35,6 +35,12 @@ export const apiEnvSchema = baseEnvSchema.extend({
 
 export const workerEnvSchema = baseEnvSchema.extend({
   WORKER_NAME: z.string().min(1),
+  /** Conexão como `app_user`: é com ela que os consumidores gravam, sob RLS. */
+  DATABASE_URL_APP: z.string().min(1),
+  /** Conexão como `app_platform`: o publicador da outbox atravessa tenants (ADR-001). */
+  DATABASE_URL_PLATFORM: z.string().min(1),
+  /** Intervalo da varredura da outbox, em milissegundos. */
+  OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).max(60_000).default(1000),
 });
 
 export type ApiEnv = z.infer<typeof apiEnvSchema>;

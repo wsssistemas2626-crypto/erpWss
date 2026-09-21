@@ -29,6 +29,7 @@
       "@erp/platform-iam/testing": ["libs/platform/iam/src/testing/index.ts"],
       "@erp/platform-audit": ["libs/platform/audit/src/index.ts"],
       "@erp/platform-outbox": ["libs/platform/outbox/src/index.ts"],
+      "@erp/platform-outbox/testing": ["libs/platform/outbox/src/testing/index.ts"],
       "@erp/platform-config": ["libs/platform/config/src/index.ts"],
       "@erp/projects": ["libs/modules/projects/src/index.ts"],
       "@erp/projects-api": ["libs/modules/projects-api/src/index.ts"],

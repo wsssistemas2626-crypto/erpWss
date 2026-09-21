@@ -83,10 +83,19 @@ describe('F0-06 variáveis de ambiente da api', () => {
 
 describe('F0-06 variáveis de ambiente do worker', () => {
   it('aceita um ambiente completo', () => {
-    expect(loadWorkerEnv({ WORKER_NAME: 'outbox' })).toEqual({
+    expect(
+      loadWorkerEnv({
+        WORKER_NAME: 'outbox',
+        DATABASE_URL_APP: DATABASE_URL,
+        DATABASE_URL_PLATFORM: DATABASE_URL,
+      }),
+    ).toEqual({
       NODE_ENV: 'development',
       LOG_LEVEL: 'info',
       WORKER_NAME: 'outbox',
+      DATABASE_URL_APP: DATABASE_URL,
+      DATABASE_URL_PLATFORM: DATABASE_URL,
+      OUTBOX_POLL_INTERVAL_MS: 1000,
     });
   });
 

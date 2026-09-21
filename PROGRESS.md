@@ -24,7 +24,7 @@ EM_ANDAMENTO
 - [x] F0-07 — Verificação de token do Clerk e resolução de tenant → fase-0#F0-07 · ADR-004 · dominio/platform.md
 - [x] F0-08 — Autorização RBAC → fase-0#F0-08 · ADR-004
 - [x] F0-09 — Auditoria → fase-0#F0-09 · dominio/platform.md
-- [ ] F0-10 — Outbox e worker → fase-0#F0-10 · ADR-003
+- [x] F0-10 — Outbox e worker → fase-0#F0-10 · ADR-003
 - [ ] F0-11 — Sincronização Clerk: webhooks e JIT → fase-0#F0-11 · ADR-004
 - [ ] F0-12 — Front: autenticação e troca de organização (Clerk) → fase-0#F0-12
 - [ ] F0-13 — Front: layout, menu por permissão, i18n, formatação → fase-0#F0-13
@@ -496,3 +496,47 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
   Cada entidade com PII na Fase 1 precisa declarar os seus, conforme o RNF020.
 - Auditar automaticamente todo caso de uso de escrita depende de disciplina, não de mecanismo. Se
   virar problema, um decorator ou um interceptor por caso de uso resolveria.
+
+### 2026-09-21 — F0-10 Outbox e worker
+
+**Feito**
+- `platform.outbox_events` e `platform.processed_events`, ambas com RLS.
+- `OutboxWriter.append(tx, evento)` — grava o evento na transação do caso de uso, e valida o
+  formato `<modulo>.<entidade>.<fato>.v<N>`.
+- `OutboxPublisher`: `FOR UPDATE SKIP LOCKED`, backoff exponencial (2 s, 4 s, 8 s… teto de 1 h) e
+  dead-letter após 10 falhas.
+- `IdempotentConsumer`: grava `(consumer_name, event_id)` na mesma transação do efeito e roda no
+  tenant do evento.
+- `EventBus` como interface, com `PgBossEventBus` (produção) e `InMemoryEventBus` (teste).
+- `apps/worker` sobe o bus e o publicador, com encerramento gracioso em SIGTERM/SIGINT.
+- 16 testes cobrindo os 4 cenários Gherkin. Verificado à mão: o worker sobe contra o Postgres
+  local, o pg-boss cria as 12 tabelas dele no schema `pgboss` conectando como `app_platform`.
+
+**Decisões menores**
+- **Resolvida a pendência do F0-05** sobre `app_platform` atravessar tenants: em vez de
+  `BYPASSRLS` — que valeria para o banco inteiro —, a `outbox_events` ganhou uma política
+  permissiva adicional `FOR ALL TO app_platform USING (true)`. O alcance cross-tenant fica restrito
+  à tabela onde ele é inerente, e as demais tabelas continuam fechadas para essa role.
+- O schema `pgboss` é criado pela migration, pela dona do banco, e o worker recebe `USAGE, CREATE`
+  nele. Assim o pg-boss cria as próprias tabelas rodando como `app_platform`, sem precisar de
+  permissão para criar schema.
+- `EventBus` é interface porque publicador e consumidores precisam ser testáveis sem fila. O
+  `InMemoryEventBus` ainda permite programar falhas, que é como o backoff e o dead-letter foram
+  testados.
+- Coluna `next_attempt_at` com índice parcial dos pendentes: o backoff precisa de estado no banco,
+  já que o publicador não guarda nada em memória entre rodadas.
+- A idempotência grava a marca **antes** do efeito, com `on conflict do nothing`: o segundo
+  consumidor concorrente vê zero linhas afetadas e desiste sem aplicar nada. Como tudo está na
+  mesma transação, efeito que falha desfaz a marca junto.
+- Nos testes, limpar as tabelas usa `TRUNCATE`: `DELETE` passaria pela RLS e exigiria declarar o
+  tenant a cada limpeza.
+- Variáveis novas do worker: `DATABASE_URL_APP`, `DATABASE_URL_PLATFORM` e
+  `OUTBOX_POLL_INTERVAL_MS`.
+
+**Pendências**
+- `/ready` da API ainda não olha a fila. Quando houver operação dependendo do worker, a sonda
+  deve incluir o pg-boss.
+- Dead-letter "gera alerta" (ADR-003): hoje só loga em nível `warn`. O canal de alerta é o
+  `platform/notifications`, que ainda não existe.
+- Nenhum consumidor real registrado ainda: os módulos da Fase 1 registram os seus no
+  `WorkerService`.
