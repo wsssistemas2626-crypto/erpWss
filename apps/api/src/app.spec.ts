@@ -37,9 +37,11 @@ beforeAll(async () => {
         LOG_LEVEL: 'fatal',
         API_PORT: 0,
         DATABASE_URL_APP: env.appUrl,
+        DATABASE_URL_PLATFORM: env.platformUrl,
         // O provedor de identidade é substituído logo abaixo; estas chaves nunca são usadas.
         CLERK_JWT_KEY: 'nao-usada-no-teste',
         CLERK_SECRET_KEY: 'nao-usada-no-teste',
+        CLERK_WEBHOOK_SIGNING_SECRET: 'nao-usada-no-teste',
         CLERK_AUTHORIZED_PARTIES: ['http://localhost:5173'],
       },
       { identityProvider: identity },

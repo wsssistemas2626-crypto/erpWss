@@ -16,7 +16,12 @@ async function bootstrap(): Promise<void> {
   const env = loadApiEnv();
   const logger = createLogger({ name: 'api', level: env.LOG_LEVEL });
 
-  const app = await NestFactory.create(AppModule.forRoot(env), { bufferLogs: true });
+  const app = await NestFactory.create(AppModule.forRoot(env), {
+    bufferLogs: true,
+    // O webhook do Clerk é verificado sobre os bytes recebidos: reserializar o JSON
+    // mudaria o corpo e a assinatura deixaria de bater (ADR-004).
+    rawBody: true,
+  });
   app.useLogger(new NestPinoLogger(logger));
   app.enableShutdownHooks();
   app.setGlobalPrefix(API_GLOBAL_PREFIX);

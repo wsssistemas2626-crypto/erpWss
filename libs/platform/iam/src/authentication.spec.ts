@@ -1,6 +1,7 @@
 import { startPostgresTestEnv, type PostgresTestEnv } from '@erp/platform-db/testing';
 import { ProblemDetailsFilter, Public } from '@erp/platform-http';
 import { createLogger } from '@erp/platform-observability';
+import { AuditRegistry, AuditService } from '@erp/platform-audit';
 import { TenantDb, requireTenantId } from '@erp/platform-tenancy';
 import { withTenantSession } from '@erp/platform-tenancy/testing';
 import { newId, type EntityId } from '@erp/shared-kernel';
@@ -22,6 +23,12 @@ import { MeController } from './http/me.controller';
 
 import { IDENTITY_PROVIDER } from './identity-provider';
 import { IdentityRepository } from './infra/identity-repository';
+import { IdentitySyncService } from './webhooks/identity-sync-service';
+import { PermissionCatalog } from './rbac/permission-catalog';
+import { PermissionRepository } from './rbac/permission-repository';
+import { PermissionService } from './rbac/permission-service';
+import { PLATFORM_MODULE, PLATFORM_PERMISSIONS } from './rbac/platform-permissions';
+import { RoleService } from './rbac/role-service';
 import { FakeIdentityProvider } from './testing';
 
 /** Rota de negócio: exige token, organização ativa e vínculo ativo. */
@@ -58,6 +65,7 @@ const USUARIO_REVOGADO = {
 let env: PostgresTestEnv;
 let app: INestApplication;
 let baseUrl: string;
+let syncService: IdentitySyncService;
 
 const discard = new Writable({
   write(_chunk, _encoding, callback) {
@@ -73,6 +81,7 @@ const discard = new Writable({
       provide: IdentityRepository,
       useFactory: () => new IdentityRepository(env.appPool, new TenantDb(env.appPool)),
     },
+    { provide: IdentitySyncService, useFactory: () => syncService },
     { provide: APP_GUARD, useClass: AuthGuard },
   ],
 })
@@ -120,6 +129,27 @@ beforeAll(async () => {
       [newId(), TENANT_SUSPENSO.id, USUARIO.id],
     );
   });
+
+  const tenantDb = new TenantDb(env.appPool);
+  const permissionRepository = new PermissionRepository();
+  const permissionService = new PermissionService(tenantDb, permissionRepository);
+  const catalog = new PermissionCatalog();
+  catalog.register(PLATFORM_MODULE, PLATFORM_PERMISSIONS);
+  const auditService = new AuditService(tenantDb, new AuditRegistry());
+  const roleService = new RoleService(
+    tenantDb,
+    permissionRepository,
+    permissionService,
+    catalog,
+    auditService,
+  );
+  syncService = new IdentitySyncService(
+    env.appPool,
+    env.platformPool,
+    tenantDb,
+    roleService,
+    auditService,
+  );
 
   app = await NestFactory.create(TestModule, { logger: false });
   app.useGlobalFilters(
@@ -256,7 +286,7 @@ describe('F0-07 token inválido', () => {
     expect(response.body.code).toBe(AUTH_INVALID_TOKEN);
   });
 
-  it('recusa usuário válido no provedor mas ainda não provisionado aqui', async () => {
+  it('recusa usuário que nem o provedor conhece', async () => {
     const token = identity.createSessionToken({ externalUserId: 'user_desconhecido' });
 
     const response = await get('/me', token);

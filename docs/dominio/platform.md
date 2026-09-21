@@ -79,6 +79,16 @@ Membership removido no Clerk vira `REVOKED` (não apagamos: histórico e auditor
 Role `app_user` tem apenas INSERT e SELECT (RNF031). Índice (`tenant_id`, `entity`, `entity_id`, `occurred_at`).
 
 ### outbox_events / processed_events
-Conforme ADR-003. Webhooks do Clerk também usam `processed_events`, com `consumer_name = 'clerk-webhook'`
-e o `svix-id` como id do evento.
-`processed_events` é global (sem RLS): `consumer_name text`, `event_id text`, `processed_at`; PK (`consumer_name`, `event_id`).
+Conforme ADR-003. `processed_events` guarda o par (consumidor, evento) já aplicado:
+`consumer_name text`, `event_id uuid`, `tenant_id`, `processed_at`; PK (`consumer_name`, `event_id`).
+Tem `tenant_id` e RLS como qualquer tabela de negócio — um consumidor de outbox sempre roda dentro
+de um tenant que já existe. As roles `app_user` e `app_platform` têm apenas SELECT e INSERT.
+
+### processed_webhooks (global)
+Idempotência dos webhooks do provedor de identidade (ADR-004): `svix_id text pk`, `event_type text`,
+`processed_at timestamptz`. O controller reclama o `svix-id` com `on conflict do nothing` antes de
+aplicar o efeito, e a reentrega responde 200 sem repetir nada.
+
+Não usa a `processed_events` acima, e não tem `tenant_id` nem RLS, porque o webhook chega **antes**
+de existir tenant — é `organization.created` que cria o tenant. Exigir um tenant aqui descartaria
+justamente o evento que funda o tenant. Role `app_user` tem apenas SELECT e INSERT.

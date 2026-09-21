@@ -15,8 +15,11 @@ import {
   AuthGuard,
   AuthenticationMiddleware,
   ClerkIdentityProvider,
+  ClerkWebhookController,
+  DB_POOL_FOR_WEBHOOKS,
   IDENTITY_PROVIDER,
   IdentityRepository,
+  IdentitySyncService,
   MeController,
   PERMISSION_CATALOG,
   PLATFORM_MODULE,
@@ -40,7 +43,7 @@ import { APP_GUARD } from '@nestjs/core';
 import type { Pool } from 'pg';
 import { DbPoolLifecycle } from './db-pool.lifecycle';
 import { HealthController } from './health/health.controller';
-import { API_ENV, DB_POOL } from './tokens';
+import { API_ENV, DB_POOL, PLATFORM_DB_POOL } from './tokens';
 
 export interface AppModuleOverrides {
   /** Substitui o provedor de identidade. O teste injeta o `FakeIdentityProvider` (ADR-004). */
@@ -59,13 +62,24 @@ export class AppModule implements NestModule {
   static forRoot(env: ApiEnv, overrides: AppModuleOverrides = {}): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, MeController, RolesController, AuditController],
+      controllers: [
+        HealthController,
+        MeController,
+        RolesController,
+        AuditController,
+        ClerkWebhookController,
+      ],
       providers: [
         { provide: API_ENV, useValue: env },
         {
           provide: DB_POOL,
           useFactory: (): Pool =>
             createDbPool(env.DATABASE_URL_APP, { applicationName: 'erp-api' }),
+        },
+        {
+          provide: PLATFORM_DB_POOL,
+          useFactory: (): Pool =>
+            createDbPool(env.DATABASE_URL_PLATFORM, { applicationName: 'erp-api-platform' }),
         },
         {
           provide: TenantDb,
@@ -80,6 +94,7 @@ export class AppModule implements NestModule {
               jwtKey: env.CLERK_JWT_KEY,
               secretKey: env.CLERK_SECRET_KEY,
               authorizedParties: env.CLERK_AUTHORIZED_PARTIES,
+              webhookSigningSecret: env.CLERK_WEBHOOK_SIGNING_SECRET,
             }),
         },
         {
@@ -152,6 +167,19 @@ export class AppModule implements NestModule {
             AuditService,
           ],
         },
+        { provide: DB_POOL_FOR_WEBHOOKS, useExisting: DB_POOL },
+        {
+          provide: IdentitySyncService,
+          useFactory: (
+            pool: Pool,
+            platformPool: Pool,
+            tenantDb: TenantDb,
+            roles: RoleService,
+            audit: AuditService,
+          ): IdentitySyncService =>
+            new IdentitySyncService(pool, platformPool, tenantDb, roles, audit),
+          inject: [DB_POOL, PLATFORM_DB_POOL, TenantDb, RoleService, AuditService],
+        },
         // A ordem é a da execução: autenticar antes de autorizar.
         // Nega por padrão: rota sem @Public exige token válido (ADR-004).
         { provide: APP_GUARD, useClass: AuthGuard },
@@ -160,6 +188,7 @@ export class AppModule implements NestModule {
       ],
       exports: [
         DB_POOL,
+        PLATFORM_DB_POOL,
         TenantDb,
         API_ENV,
         IDENTITY_PROVIDER,
@@ -168,6 +197,7 @@ export class AppModule implements NestModule {
         PermissionService,
         RoleService,
         AuditService,
+        IdentitySyncService,
       ],
     };
   }

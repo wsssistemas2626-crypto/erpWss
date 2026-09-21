@@ -1,6 +1,9 @@
 # ADR-004 — Autenticação com Clerk (Organizations = tenants) e autorização RBAC própria
 
 **Status:** Aceito · **Data:** 2026-09-21 · Substitui a versão anterior (autenticação própria)
+· **Emenda 2026-09-21 (F0-11):** a tabela de idempotência dos webhooks passou de
+`platform.processed_events` para `platform.processed_webhooks`; o motivo está na seção
+"Sincronização Clerk → banco local".
 
 ## Contexto
 Precisamos de login seguro, MFA, gestão de sessão, convites e, futuramente, SSO corporativo.
@@ -29,7 +32,11 @@ A autorização do ERP é granular (`modulo.recurso.acao`) e configurável por t
   para permitir joins, auditoria e RBAC.
 - **Webhooks** do Clerk (`user.*`, `organization.*`, `organizationMembership.*`) em
   `POST /api/v1/webhooks/clerk`, verificados com `verifyWebhook` (assinatura Svix, `CLERK_WEBHOOK_SIGNING_SECRET`).
-  Processamento idempotente pelo `svix-id` em `platform.processed_events`.
+  Processamento idempotente pelo `svix-id` em `platform.processed_webhooks`, tabela **global, sem
+  `tenant_id` e sem RLS**. Não é a `processed_events` do ADR-003: aquela é por tenant e sob RLS,
+  porque um consumidor de outbox sempre roda dentro de um tenant que já existe. O webhook chega
+  antes — é `organization.created` que cria o tenant —, então não há tenant sob o qual gravar a
+  marca de idempotência, e exigir um significaria descartar justamente o evento que funda o tenant.
 - **Provisionamento sob demanda (JIT):** se chegar um token válido de usuário/organização ainda não
   sincronizado (webhook atrasado), o backend busca os dados na Backend API do Clerk e faz upsert.
   Assim o sistema funciona mesmo sem webhooks (ex.: desenvolvimento local e E2E).

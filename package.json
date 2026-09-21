@@ -15,6 +15,7 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:migrate": "tsx libs/platform/db/src/infra/migrate-cli.ts",
+    "cli": "tsx --tsconfig tsconfig.cli.json apps/api/src/cli/main.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

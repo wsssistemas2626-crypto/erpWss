@@ -6,11 +6,19 @@
  */
 export {
   IDENTITY_PROVIDER,
+  type IdentityMembership,
   type IdentityOrganization,
   type IdentityProvider,
   type IdentityUser,
   type SessionClaims,
 } from './identity-provider';
+
+export {
+  DevSeedUserNotFoundError,
+  seedDevelopmentIdentity,
+  type DevSeedResult,
+  type SeededTenant,
+} from './cli/dev-seed';
 
 export {
   ClerkIdentityProvider,
@@ -50,6 +58,25 @@ export { IdentityRepository, type MembershipRecord } from './infra/identity-repo
 export { memberships, membershipStatus, users, userStatus } from './infra/schema';
 
 export { AuthGuard } from './http/auth.guard';
+export { ClerkWebhookController, type WebhookAck } from './webhooks/webhook.controller';
+export { DB_POOL_FOR_WEBHOOKS } from './webhooks/tokens';
+export {
+  CLERK_ADMIN_ROLE,
+  DEFAULT_MEMBER_ROLE,
+  IdentitySyncService,
+  type SyncOutcome,
+  type SyncedTenant,
+} from './webhooks/identity-sync-service';
+export {
+  HANDLED_WEBHOOK_TYPES,
+  SVIX_ID_HEADER,
+  SVIX_SIGNATURE_HEADER,
+  SVIX_TIMESTAMP_HEADER,
+  type IdentityWebhookEvent,
+  type IdentityWebhookType,
+  type WebhookRequest,
+} from './webhooks/webhook-event';
+export { WEBHOOK_SIGNATURE_INVALID, WebhookSignatureInvalidError } from './webhooks/webhook-errors';
 export { PermissionGuard } from './http/permission.guard';
 export { RolesController } from './http/roles.controller';
 

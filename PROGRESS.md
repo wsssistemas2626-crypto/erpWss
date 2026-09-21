@@ -25,7 +25,7 @@ EM_ANDAMENTO
 - [x] F0-08 — Autorização RBAC → fase-0#F0-08 · ADR-004
 - [x] F0-09 — Auditoria → fase-0#F0-09 · dominio/platform.md
 - [x] F0-10 — Outbox e worker → fase-0#F0-10 · ADR-003
-- [ ] F0-11 — Sincronização Clerk: webhooks e JIT → fase-0#F0-11 · ADR-004
+- [x] F0-11 — Sincronização Clerk: webhooks e JIT → fase-0#F0-11 · ADR-004
 - [ ] F0-12 — Front: autenticação e troca de organização (Clerk) → fase-0#F0-12
 - [ ] F0-13 — Front: layout, menu por permissão, i18n, formatação → fase-0#F0-13
 - [ ] F0-14 — Infraestrutura E2E e `pnpm verify` completo → fase-0#F0-14
@@ -540,3 +540,87 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
   `platform/notifications`, que ainda não existe.
 - Nenhum consumidor real registrado ainda: os módulos da Fase 1 registram os seus no
   `WorkerService`.
+
+### 2026-09-21 — F0-11 Sincronização Clerk: webhooks e provisionamento sob demanda
+
+**Feito**
+- `POST /api/v1/webhooks/clerk` (`@Public`, corpo bruto preservado via `rawBody: true` no
+  `NestFactory.create`), verificado por `IdentityProvider.verifyWebhook`. Trata `user.*`,
+  `organization.*` e `organizationMembership.*`; evento fora dessa lista responde 200 `ignored`.
+- Idempotência por `svix-id` em `platform.processed_webhooks` (migration 0003), reclamada com
+  `on conflict do nothing` antes de aplicar o efeito: a reentrega responde 200 `duplicated`.
+- `IdentitySyncService`: upserts idempotentes de usuário, tenant e vínculo, usados tanto pelo
+  webhook quanto pelo provisionamento sob demanda. Tenant novo nasce com os seis papéis do F0-08;
+  `org:admin` no Clerk vira `Administrador`, o resto `Membro de Equipe` — e só no primeiro vínculo,
+  depois disso apenas o RBAC local vale.
+- Provisionamento sob demanda no `AuthenticationMiddleware`: token válido de usuário/organização
+  ainda não espelhados materializa os três registros a partir da Backend API. `AUTH_USER_NOT_PROVISIONED`
+  e `TENANT_NOT_PROVISIONED` deixam de ser o caminho normal e sobram só para quem nem o provedor conhece
+  (**resolve a pendência anotada no F0-07**).
+- `pnpm cli dev:seed`: a partir de `E2E_CLERK_USER_EMAIL`, copia do Clerk de desenvolvimento o
+  usuário, as organizações dele e os vínculos. É o que povoa o banco onde o webhook não tem como
+  chegar (desenvolvimento local e E2E do F0-14).
+- 53 testes no `platform-iam`, cobrindo os seis cenários Gherkin da story mais renomeação e
+  encerramento de organização, e a semeadura de desenvolvimento. `pnpm verify` passa:
+  22 projetos, 66 tarefas.
+
+**Decisões menores**
+- A API passou a abrir também uma conexão `app_platform` (`DATABASE_URL_PLATFORM`, token
+  `PLATFORM_DB_POOL`): a sincronização precisa de duas leituras que atravessam tenants — em quais
+  tenants um usuário excluído tem vínculo, e a qual tenant pertence um vínculo removido —, ambas
+  antes de haver tenant no contexto. Migration 0004 dá a `app_platform` uma política **só de
+  leitura** sobre `platform.memberships`, mesmo desenho já usado na `outbox_events` no F0-10.
+  A escrita continua toda por `app_user`, dentro da transação do tenant.
+- Tabela de idempotência chamada `processed_webhooks`, e não `processed_events` como diz o ADR-004:
+  esse nome já é da tabela do outbox (F0-10), que tem `tenant_id` e RLS. O webhook chega **antes**
+  de existir tenant — é ele que cria o tenant —, então precisa de uma tabela global, sem RLS.
+- O conflito do upsert de vínculo é pela dupla `(tenant_id, user_id)`, não pelo `clerk_membership_id`:
+  é o que faz o vínculo criado sob demanda (id provisório `jit_<org>_<user>`) ser reconciliado quando
+  o webhook chega depois com o id verdadeiro, em vez de virar uma segunda linha.
+- Auditoria das mudanças vindas do provedor vai sem `userId` (ação de sistema, como o `AuditEntry`
+  já previa): criação e renomeação de tenant, encerramento de tenant, criação/reativação de vínculo
+  e revogação. Usuário e tenant são tabelas globais, mas toda mudança auditada aqui tem um tenant
+  onde arquivá-la. `user.deleted` aparece na trilha de cada tenant como a revogação do vínculo,
+  com o motivo.
+- `IdentityProvider` ganhou `verifyWebhook`, `findUserByEmail` e `listMembershipsOfUser`. Os dois
+  últimos existem só para o `dev:seed`, que parte de um e-mail — não há token nem webhook de onde
+  tirar os ids. O `FakeIdentityProvider` assina webhooks com HMAC-SHA256 sobre `id.timestamp.payload`,
+  o mesmo esquema do Svix, para o cenário de assinatura inválida provar alguma coisa.
+- `pnpm cli` é um despachante em `apps/api/src/cli/main.ts` (composição, sem regra de negócio;
+  o que cada comando faz mora na lib dona do assunto), e não um app Nx novo — `type:tool` não pode
+  depender de lib nenhuma pelas fronteiras do ADR-002, e a §5 do CLAUDE.md fixa os três apps.
+  Roda por `tsx` com `tsconfig.cli.json` na raiz, que junta os caminhos `@erp/*` e os decorators
+  do Nest (nenhum tsconfig existente tinha os dois).
+- `nx.json` ganhou `"analytics": true` na rodada anterior, ao responder um prompt do Nx. Mantido:
+  removê-lo faz o prompt voltar e travar o autoloop.
+
+**Pendências**
+- `pnpm cli dev:seed` foi exercitado até a chamada ao Clerk, onde para em "Unauthorized": o `.env`
+  local ainda tem o `sk_test_xxx` do `.env.example`. Preencher `CLERK_SECRET_KEY` e
+  `E2E_CLERK_USER_EMAIL` com a instância de desenvolvimento antes do F0-14, que depende deste comando.
+- O webhook não tem como chegar em desenvolvimento sem um túnel (ngrok ou similar) apontado para
+  `/api/v1/webhooks/clerk`. Até lá, `dev:seed` e o provisionamento sob demanda cobrem o caminho.
+- `organization.updated` espelha nome e slug; mudanças de plano/limites do tenant não existem ainda.
+
+### 2026-09-21 — Alinhamento do ADR-004 e do modelo de domínio (sem código)
+
+**Feito**
+- ADR-004, seção "Sincronização Clerk → banco local": a idempotência dos webhooks passa a apontar
+  `platform.processed_webhooks`, com o motivo escrito ali — a `processed_events` do ADR-003 é por
+  tenant e sob RLS, porque um consumidor de outbox sempre roda dentro de um tenant que já existe;
+  o webhook chega antes, já que é `organization.created` que cria o tenant. Nota de emenda no
+  cabeçalho do ADR, que continua **Aceito**.
+- `docs/dominio/platform.md`: seção nova `processed_webhooks (global)` com as colunas reais
+  (`svix_id` pk, `event_type`, `processed_at`) e o mesmo motivo.
+- `docs/dominio/platform.md`: corrigida a descrição da `processed_events`, que estava defasada em
+  relação ao que o F0-10 implementou. O texto dizia "global (sem RLS)" e `event_id text`; a tabela
+  tem `tenant_id` com FK, RLS ativa e `event_id uuid`. Também caiu a frase que mandava os webhooks
+  do Clerk usarem essa tabela com `consumer_name = 'clerk-webhook'`.
+
+**Decisões menores**
+- A emenda ficou no cabeçalho do ADR em vez de um ADR novo: o que mudou foi o nome e o desenho de
+  uma tabela de apoio, não a decisão de usar Clerk, webhooks e idempotência por `svix-id`.
+
+**Pendências**
+- Nenhuma. Só documentação: nenhum arquivo de código, migration ou teste foi tocado, e a pendência
+  registrada no F0-11 sobre o desvio do ADR está resolvida.

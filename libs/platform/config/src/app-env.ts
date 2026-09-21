@@ -25,12 +25,20 @@ export const apiEnvSchema = baseEnvSchema.extend({
   API_PORT: z.coerce.number().int().min(1).max(65535),
   /** Conexão como `app_user`: sujeita à RLS (ADR-001). A API nunca usa a conexão dona. */
   DATABASE_URL_APP: z.string().min(1),
+  /**
+   * Conexão como `app_platform`: a sincronização com o provedor de identidade atravessa
+   * tenants (revogar os vínculos de um usuário excluído, achar o tenant de um vínculo).
+   * É a exceção que o ADR-001 concede às rotinas de plataforma.
+   */
+  DATABASE_URL_PLATFORM: z.string().min(1),
   /** Chave pública do Clerk: torna a verificação do token networkless (ADR-004). */
   CLERK_JWT_KEY: z.string().min(1),
   /** Backend API do Clerk, usada no provisionamento sob demanda. */
   CLERK_SECRET_KEY: z.string().min(1),
   /** Origens aceitas no claim `azp` do token. */
   CLERK_AUTHORIZED_PARTIES: commaSeparated,
+  /** Segredo de assinatura dos webhooks (Svix). */
+  CLERK_WEBHOOK_SIGNING_SECRET: z.string().min(1),
 });
 
 export const workerEnvSchema = baseEnvSchema.extend({

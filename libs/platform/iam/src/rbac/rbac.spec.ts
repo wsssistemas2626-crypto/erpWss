@@ -16,6 +16,7 @@ import { PermissionGuard } from '../http/permission.guard';
 import { RolesController } from '../http/roles.controller';
 import { IDENTITY_PROVIDER } from '../identity-provider';
 import { IdentityRepository } from '../infra/identity-repository';
+import { IdentitySyncService } from '../webhooks/identity-sync-service';
 import { FakeIdentityProvider } from '../testing';
 import { PermissionCatalog } from './permission-catalog';
 import { PermissionRepository } from './permission-repository';
@@ -35,6 +36,7 @@ let app: INestApplication;
 let baseUrl: string;
 let roleService: RoleService;
 let auditService: AuditService;
+let syncService: IdentitySyncService;
 let permissionService: PermissionService;
 
 const discard = new Writable({
@@ -51,6 +53,7 @@ const discard = new Writable({
       provide: IdentityRepository,
       useFactory: () => new IdentityRepository(env.appPool, new TenantDb(env.appPool)),
     },
+    { provide: IdentitySyncService, useFactory: () => syncService },
     { provide: PermissionService, useFactory: () => permissionService },
     { provide: RoleService, useFactory: () => roleService },
     { provide: APP_GUARD, useClass: AuthGuard },
@@ -74,6 +77,13 @@ beforeAll(async () => {
   const auditRegistry = new AuditRegistry();
   auditService = new AuditService(tenantDb, auditRegistry);
   roleService = new RoleService(tenantDb, repository, permissionService, catalog, auditService);
+  syncService = new IdentitySyncService(
+    env.appPool,
+    env.platformPool,
+    tenantDb,
+    roleService,
+    auditService,
+  );
 
   await env.ownerPool.query(
     `insert into platform.tenants (id, clerk_org_id, name, slug) values ($1, $2, 'RBAC', $3)`,

@@ -48,6 +48,7 @@ pnpm verify
 | `pnpm build` | build de todos os projetos em `dist/` |
 | `pnpm db:up` / `pnpm db:down` | sobe/derruba o PostgreSQL 16 local (docker compose) |
 | `pnpm db:migrate` | cria as roles e aplica as migrations de todos os módulos |
+| `pnpm cli dev:seed` | copia do Clerk de desenvolvimento o usuário de teste e as organizações dele para o banco local |
 | `pnpm e2e` | testes Playwright (configurados no item F0-14) |
 | `pnpm format` | Prettier em todo o repositório |
 

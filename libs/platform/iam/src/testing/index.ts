@@ -4,6 +4,7 @@
  */
 export {
   FAKE_AUTHORIZED_PARTY,
+  FAKE_WEBHOOK_SECRET,
   FakeIdentityProvider,
   type FakeTokenOptions,
 } from './fake-identity-provider';

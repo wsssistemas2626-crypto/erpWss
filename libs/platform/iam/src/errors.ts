@@ -1,4 +1,5 @@
 import { DomainError } from '@erp/shared-kernel';
+import { WEBHOOK_SIGNATURE_INVALID } from './webhooks/webhook-errors';
 
 /**
  * Erros de autenticação e de acesso ao tenant (F0-07).
@@ -74,4 +75,5 @@ export const IAM_ERROR_STATUS: Readonly<Record<string, number>> = {
   [TENANT_ACCESS_REVOKED]: 403,
   [TENANT_INACTIVE]: 403,
   [AUTH_FORBIDDEN]: 403,
+  [WEBHOOK_SIGNATURE_INVALID]: 400,
 };

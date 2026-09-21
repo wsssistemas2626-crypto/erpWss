@@ -1,11 +1,20 @@
 import { runInTenantContext } from '@erp/platform-tenancy';
 import { Inject, Injectable, type NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
-import { runInAuthContext, type AuthContext } from '../auth-context';
-import { AuthInvalidTokenError } from '../errors';
+import {
+  runInAuthContext,
+  type AuthContext,
+  type AuthenticatedTenant,
+  type AuthenticatedUser,
+} from '../auth-context';
+import {
+  AuthInvalidTokenError,
+  TenantNotProvisionedError,
+  UserNotProvisionedError,
+} from '../errors';
 import { IDENTITY_PROVIDER, type IdentityProvider } from '../identity-provider';
 import { IdentityRepository } from '../infra/identity-repository';
-import { TenantNotProvisionedError, UserNotProvisionedError } from '../errors';
+import { IdentitySyncService } from '../webhooks/identity-sync-service';
 
 const BEARER = /^Bearer\s+(.+)$/i;
 
@@ -24,6 +33,7 @@ export class AuthenticationMiddleware implements NestMiddleware {
   constructor(
     @Inject(IDENTITY_PROVIDER) private readonly identity: IdentityProvider,
     private readonly repository: IdentityRepository,
+    private readonly sync: IdentitySyncService,
   ) {}
 
   use(request: Request, response: Response, next: NextFunction): void {
@@ -55,22 +65,30 @@ export class AuthenticationMiddleware implements NestMiddleware {
   private async buildContext(token: string): Promise<AuthContext> {
     const claims = await this.identity.verifySessionToken(token);
 
-    const user = await this.repository.findUserByExternalId(claims.externalUserId);
-    if (user === undefined) {
-      // No F0-11 este ponto passa a provisionar sob demanda em vez de recusar.
-      throw new UserNotProvisionedError(claims.externalUserId);
-    }
+    // Provisionamento sob demanda (ADR-004): se o webhook ainda não chegou — ou nunca vai
+    // chegar, como em desenvolvimento sem túnel —, o primeiro acesso com token válido
+    // materializa usuário, tenant e vínculo. O sistema funciona sem webhook.
+    const user =
+      (await this.repository.findUserByExternalId(claims.externalUserId)) ??
+      (await this.provisionUser(claims.externalUserId));
 
     if (claims.externalOrganizationId === undefined) {
       return { user, sessionId: claims.sessionId };
     }
 
-    const tenant = await this.repository.findTenantByExternalId(claims.externalOrganizationId);
-    if (tenant === undefined) {
-      throw new TenantNotProvisionedError(claims.externalOrganizationId);
-    }
+    const tenant =
+      (await this.repository.findTenantByExternalId(claims.externalOrganizationId)) ??
+      (await this.provisionTenant(claims.externalOrganizationId));
 
-    const membership = await this.repository.findMembership(tenant.id, user.id);
+    let membership = await this.repository.findMembership(tenant.id, user.id);
+    if (membership === undefined) {
+      await this.sync.provisionMembershipFromSession({
+        externalOrganizationId: claims.externalOrganizationId,
+        externalUserId: claims.externalUserId,
+        clerkRole: claims.organizationRole ?? '',
+      });
+      membership = await this.repository.findMembership(tenant.id, user.id);
+    }
 
     return {
       user,
@@ -80,6 +98,41 @@ export class AuthenticationMiddleware implements NestMiddleware {
         ? {}
         : { membershipId: membership.id, membershipStatus: membership.status }),
     };
+  }
+
+  private async provisionUser(externalUserId: string): Promise<AuthenticatedUser> {
+    // Se nem o provedor conhece o usuário, não há o que provisionar: é 403, não 500.
+    const fromProvider = await this.identity.getUser(externalUserId).catch(() => {
+      throw new UserNotProvisionedError(externalUserId);
+    });
+    await this.sync.upsertUser({
+      externalId: fromProvider.externalId,
+      email: fromProvider.email,
+      name: fromProvider.name,
+    });
+
+    const user = await this.repository.findUserByExternalId(externalUserId);
+    if (user === undefined) {
+      throw new UserNotProvisionedError(externalUserId);
+    }
+    return user;
+  }
+
+  private async provisionTenant(externalOrganizationId: string): Promise<AuthenticatedTenant> {
+    const fromProvider = await this.identity.getOrganization(externalOrganizationId).catch(() => {
+      throw new TenantNotProvisionedError(externalOrganizationId);
+    });
+    await this.sync.upsertTenant({
+      externalId: fromProvider.externalId,
+      name: fromProvider.name,
+      slug: fromProvider.slug,
+    });
+
+    const tenant = await this.repository.findTenantByExternalId(externalOrganizationId);
+    if (tenant === undefined) {
+      throw new TenantNotProvisionedError(externalOrganizationId);
+    }
+    return tenant;
   }
 }
 

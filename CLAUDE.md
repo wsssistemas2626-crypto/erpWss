@@ -155,6 +155,7 @@ http/          # controllers, mapeamento DTO <-> domínio
 | `pnpm dev` | sobe api, worker e web |
 | `pnpm db:up` | sobe Postgres local (docker compose) |
 | `pnpm db:migrate` | aplica migrations |
+| `pnpm cli dev:seed` | provisiona localmente o usuário de teste do Clerk de desenvolvimento e as organizações dele |
 | `pnpm e2e` | testes Playwright |
 
 (Os comandos são criados nos itens F0-01 a F0-03. Até o F0-14, `pnpm verify` é apenas um alias de `pnpm check`.)
@@ -166,7 +167,7 @@ Arquivo `.env` na raiz (nunca commitado; modelo em `.env.example`). Use só a in
 
 | Variável | Uso |
 |---|---|
-| `DATABASE_URL_APP` / `DATABASE_URL_OWNER` | conexões como `app_user` e `app_owner` |
+| `DATABASE_URL_APP` / `DATABASE_URL_OWNER` / `DATABASE_URL_PLATFORM` | conexões como `app_user`, `app_owner` e `app_platform` |
 | `CLERK_SECRET_KEY` | Backend API do Clerk (JIT, E2E) |
 | `CLERK_JWT_KEY` | verificação networkless do token |
 | `CLERK_WEBHOOK_SIGNING_SECRET` | verificação de webhooks |
