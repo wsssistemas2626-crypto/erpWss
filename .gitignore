@@ -8,3 +8,6 @@ coverage/
 autoloop.log
 playwright-report/
 test-results/
+
+# fixtures temporários do teste de arquitetura (tools/architecture)
+__arch_fixtures__/

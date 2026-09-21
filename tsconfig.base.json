@@ -16,7 +16,24 @@
     "sourceMap": true,
     "declaration": false,
     "baseUrl": ".",
-    "paths": {}
+    "paths": {
+      "@erp/shared-kernel": ["libs/shared/kernel/src/index.ts"],
+      "@erp/shared-contracts": ["libs/shared/contracts/src/index.ts"],
+      "@erp/platform-db": ["libs/platform/db/src/index.ts"],
+      "@erp/platform-tenancy": ["libs/platform/tenancy/src/index.ts"],
+      "@erp/platform-iam": ["libs/platform/iam/src/index.ts"],
+      "@erp/platform-audit": ["libs/platform/audit/src/index.ts"],
+      "@erp/platform-outbox": ["libs/platform/outbox/src/index.ts"],
+      "@erp/platform-config": ["libs/platform/config/src/index.ts"],
+      "@erp/projects": ["libs/modules/projects/src/index.ts"],
+      "@erp/projects-api": ["libs/modules/projects-api/src/index.ts"],
+      "@erp/partners": ["libs/modules/partners/src/index.ts"],
+      "@erp/partners-api": ["libs/modules/partners-api/src/index.ts"],
+      "@erp/organization": ["libs/modules/organization/src/index.ts"],
+      "@erp/organization-api": ["libs/modules/organization-api/src/index.ts"],
+      "@erp/web-shell": ["libs/web/shell/src/index.ts"],
+      "@erp/web-projects": ["libs/web/projects/src/index.ts"]
+    }
   },
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "**/__arch_fixtures__/**"]
 }
