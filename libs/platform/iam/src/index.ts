@@ -52,7 +52,6 @@ export { memberships, membershipStatus, users, userStatus } from './infra/schema
 export { AuthGuard } from './http/auth.guard';
 export { PermissionGuard } from './http/permission.guard';
 export { RolesController } from './http/roles.controller';
-export { REQUIRED_PERMISSION, RequirePermission } from './http/require-permission.decorator';
 
 export {
   PERMISSION_CATALOG,
@@ -67,9 +66,3 @@ export { PERMISSION_UNKNOWN, ROLE_IS_SYSTEM, RoleService } from './rbac/role-ser
 export { ADMINISTRATOR_ROLE, SYSTEM_ROLES, type SystemRoleDefinition } from './rbac/system-roles';
 export { AuthenticationMiddleware } from './http/authentication.middleware';
 export { MeController, type MeResponse } from './http/me.controller';
-export {
-  ALLOWS_WITHOUT_TENANT,
-  AllowWithoutTenant,
-  IS_PUBLIC,
-  Public,
-} from './http/public.decorator';

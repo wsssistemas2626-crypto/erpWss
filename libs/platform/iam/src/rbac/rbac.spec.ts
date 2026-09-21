@@ -1,6 +1,7 @@
 import { startPostgresTestEnv, type PostgresTestEnv } from '@erp/platform-db/testing';
 import { ProblemDetailsFilter } from '@erp/platform-http';
 import { createLogger } from '@erp/platform-observability';
+import { AuditRegistry, AuditService } from '@erp/platform-audit';
 import { TenantDb } from '@erp/platform-tenancy';
 import { withTenantSession } from '@erp/platform-tenancy/testing';
 import { CONCURRENCY_CONFLICT, ENTITY_NOT_FOUND, newId, type EntityId } from '@erp/shared-kernel';
@@ -33,6 +34,7 @@ let env: PostgresTestEnv;
 let app: INestApplication;
 let baseUrl: string;
 let roleService: RoleService;
+let auditService: AuditService;
 let permissionService: PermissionService;
 
 const discard = new Writable({
@@ -66,9 +68,12 @@ beforeAll(async () => {
 
   const catalog = new PermissionCatalog();
   catalog.register(PLATFORM_MODULE, PLATFORM_PERMISSIONS);
-  const repository = new PermissionRepository(new TenantDb(env.appPool));
-  permissionService = new PermissionService(repository);
-  roleService = new RoleService(repository, permissionService, catalog);
+  const tenantDb = new TenantDb(env.appPool);
+  const repository = new PermissionRepository();
+  permissionService = new PermissionService(tenantDb, repository);
+  const auditRegistry = new AuditRegistry();
+  auditService = new AuditService(tenantDb, auditRegistry);
+  roleService = new RoleService(tenantDb, repository, permissionService, catalog, auditService);
 
   await env.ownerPool.query(
     `insert into platform.tenants (id, clerk_org_id, name, slug) values ($1, $2, 'RBAC', $3)`,
@@ -95,8 +100,18 @@ beforeAll(async () => {
 
   const administrador = await roleService.findSystemRoleByName(TENANT.id, ADMINISTRATOR_ROLE);
   const leitor = await roleService.findSystemRoleByName(TENANT.id, 'Leitor');
-  await roleService.assignRoles(TENANT.id, ADMIN.membershipId, { roleIds: [administrador ?? ''] });
-  await roleService.assignRoles(TENANT.id, LEITOR.membershipId, { roleIds: [leitor ?? ''] });
+  await roleService.assignRoles(
+    TENANT.id,
+    ADMIN.membershipId,
+    { roleIds: [administrador ?? ''] },
+    ADMIN.id,
+  );
+  await roleService.assignRoles(
+    TENANT.id,
+    LEITOR.membershipId,
+    { roleIds: [leitor ?? ''] },
+    ADMIN.id,
+  );
 
   app = await NestFactory.create(TestModule, { logger: false });
   app.useGlobalFilters(
@@ -271,21 +286,88 @@ describe('F0-08 CRUD de papéis', () => {
   });
 });
 
+describe('F0-09 alteração registrada com antes e depois', () => {
+  it('renomear um papel deixa um registro UPDATE com before.name e after.name', async () => {
+    const lista = await call('GET', '/roles', ADMIN);
+    const items = lista.body.items as readonly { id: string; name: string; version: number }[];
+    const financeiro = items.find((role) => role.name === 'Financeiro');
+
+    const antes = Date.now();
+    const alterado = await call('PUT', `/roles/${financeiro?.id ?? ''}`, ADMIN, {
+      version: financeiro?.version ?? 1,
+      name: 'Financeiro Sênior',
+    });
+    expect(alterado.status).toBe(200);
+
+    const trilha = await auditService.findByEntity(TENANT.id, {
+      entity: 'role',
+      entityId: financeiro?.id ?? '',
+      offset: 0,
+      limit: 10,
+    });
+
+    expect(trilha.items[0]).toMatchObject({
+      action: 'UPDATE',
+      userId: ADMIN.id,
+      module: 'platform',
+      before: { name: 'Financeiro' },
+      after: { name: 'Financeiro Sênior' },
+    });
+    expect(trilha.items[0]?.occurredAt.getTime()).toBeGreaterThanOrEqual(antes - 1000);
+
+    // devolve o nome, para os demais testes continuarem valendo
+    const atual = (await call('GET', '/roles', ADMIN)).body.items as readonly {
+      id: string;
+      name: string;
+      version: number;
+    }[];
+    const renomeado = atual.find((role) => role.name === 'Financeiro Sênior');
+    await call('PUT', `/roles/${renomeado?.id ?? ''}`, ADMIN, {
+      version: renomeado?.version ?? 2,
+      name: 'Financeiro',
+    });
+  });
+
+  it('criar e excluir papel também deixam rastro', async () => {
+    const criado = await call('POST', '/roles', ADMIN, { name: 'Temporário', permissions: [] });
+    const roleId = criado.body.id as string;
+
+    await call('DELETE', `/roles/${roleId}`, ADMIN);
+
+    const trilha = await auditService.findByEntity(TENANT.id, {
+      entity: 'role',
+      entityId: roleId,
+      offset: 0,
+      limit: 10,
+    });
+
+    expect(trilha.items.map((item) => item.action)).toEqual(['DELETE', 'CREATE']);
+  });
+});
+
 describe('F0-08 atribuição de papéis invalida o cache na hora', () => {
   it('dar Administrador ao Leitor libera o acesso sem esperar o TTL', async () => {
     const negado = await call('GET', '/roles', LEITOR);
     expect(negado.status).toBe(403);
 
     const administrador = await roleService.findSystemRoleByName(TENANT.id, ADMINISTRATOR_ROLE);
-    await roleService.assignRoles(TENANT.id, LEITOR.membershipId, {
-      roleIds: [administrador ?? ''],
-    });
+    await roleService.assignRoles(
+      TENANT.id,
+      LEITOR.membershipId,
+      { roleIds: [administrador ?? ''] },
+      ADMIN.id,
+    );
 
     const liberado = await call('GET', '/roles', LEITOR);
     expect(liberado.status).toBe(200);
 
     const leitor = await roleService.findSystemRoleByName(TENANT.id, 'Leitor');
-    await roleService.assignRoles(TENANT.id, LEITOR.membershipId, { roleIds: [leitor ?? ''] });
+    await roleService.assignRoles(
+      TENANT.id,
+      LEITOR.membershipId,
+      { roleIds: [leitor ?? ''] },
+      ADMIN.id,
+    );
     expect((await call('GET', '/roles', LEITOR)).status).toBe(403);
   });
 

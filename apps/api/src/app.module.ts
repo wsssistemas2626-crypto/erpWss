@@ -1,6 +1,16 @@
 import type { ApiEnv } from '@erp/platform-config';
+import {
+  AUDIT_PERMISSIONS,
+  AUDIT_REGISTRY,
+  AUDIT_TENANT_RESOLVER,
+  AuditController,
+  AuditRegistry,
+  AuditService,
+  type AuditTenantResolver,
+} from '@erp/platform-audit';
 import { createDbPool } from '@erp/platform-db';
 import { CorrelationIdMiddleware } from '@erp/platform-http';
+import { requireAuthContext } from '@erp/platform-iam';
 import {
   AuthGuard,
   AuthenticationMiddleware,
@@ -49,7 +59,7 @@ export class AppModule implements NestModule {
   static forRoot(env: ApiEnv, overrides: AppModuleOverrides = {}): DynamicModule {
     return {
       module: AppModule,
-      controllers: [HealthController, MeController, RolesController],
+      controllers: [HealthController, MeController, RolesController, AuditController],
       providers: [
         { provide: API_ENV, useValue: env },
         {
@@ -82,31 +92,65 @@ export class AppModule implements NestModule {
           provide: PERMISSION_CATALOG,
           useFactory: (): PermissionCatalog => {
             const catalog = new PermissionCatalog();
-            catalog.register(PLATFORM_MODULE, PLATFORM_PERMISSIONS);
+            catalog.register(PLATFORM_MODULE, [...PLATFORM_PERMISSIONS, ...AUDIT_PERMISSIONS]);
             // Cada módulo de negócio registra as suas aqui, a partir da Fase 1.
             return catalog;
           },
         },
         {
           provide: PermissionRepository,
-          useFactory: (tenantDb: TenantDb): PermissionRepository =>
-            new PermissionRepository(tenantDb),
-          inject: [TenantDb],
+          useFactory: (): PermissionRepository => new PermissionRepository(),
         },
         {
           provide: PermissionService,
-          useFactory: (repository: PermissionRepository): PermissionService =>
-            new PermissionService(repository),
-          inject: [PermissionRepository],
+          useFactory: (tenantDb: TenantDb, repository: PermissionRepository): PermissionService =>
+            new PermissionService(tenantDb, repository),
+          inject: [TenantDb, PermissionRepository],
+        },
+        {
+          provide: AUDIT_REGISTRY,
+          useFactory: (): AuditRegistry => {
+            const registry = new AuditRegistry();
+            // Cada módulo declara aqui os campos PII das suas entidades (RNF020).
+            registry.register([]);
+            return registry;
+          },
+        },
+        {
+          provide: AuditService,
+          useFactory: (tenantDb: TenantDb, registry: AuditRegistry): AuditService =>
+            new AuditService(tenantDb, registry),
+          inject: [TenantDb, AUDIT_REGISTRY],
+        },
+        {
+          // O IAM conhece o AuthContext; a lib de auditoria, não. A composição liga os dois.
+          provide: AUDIT_TENANT_RESOLVER,
+          useValue: {
+            currentTenantId: () => {
+              const auth = requireAuthContext();
+              if (auth.tenant === undefined) {
+                throw new Error('Consulta de auditoria sem tenant no contexto.');
+              }
+              return auth.tenant.id;
+            },
+          } satisfies AuditTenantResolver,
         },
         {
           provide: RoleService,
           useFactory: (
+            tenantDb: TenantDb,
             repository: PermissionRepository,
             permissions: PermissionService,
             catalog: PermissionCatalog,
-          ): RoleService => new RoleService(repository, permissions, catalog),
-          inject: [PermissionRepository, PermissionService, PERMISSION_CATALOG],
+            audit: AuditService,
+          ): RoleService => new RoleService(tenantDb, repository, permissions, catalog, audit),
+          inject: [
+            TenantDb,
+            PermissionRepository,
+            PermissionService,
+            PERMISSION_CATALOG,
+            AuditService,
+          ],
         },
         // A ordem é a da execução: autenticar antes de autorizar.
         // Nega por padrão: rota sem @Public exige token válido (ADR-004).
@@ -123,6 +167,7 @@ export class AppModule implements NestModule {
         PERMISSION_CATALOG,
         PermissionService,
         RoleService,
+        AuditService,
       ],
     };
   }

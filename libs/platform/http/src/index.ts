@@ -10,3 +10,12 @@ export { CORRELATION_ID_HEADER, CorrelationIdMiddleware } from './correlation-id
 export { ProblemDetailsFilter, type ProblemDetailsFilterOptions } from './problem-details.filter';
 
 export { OPENAPI_PATH, setupOpenApi, type OpenApiOptions } from './openapi';
+
+export {
+  ALLOWS_WITHOUT_TENANT,
+  AllowWithoutTenant,
+  IS_PUBLIC,
+  Public,
+  REQUIRED_PERMISSION,
+  RequirePermission,
+} from './authorization.decorators';

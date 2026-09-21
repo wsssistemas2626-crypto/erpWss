@@ -2,11 +2,12 @@ import { newId } from '@erp/shared-kernel';
 import { describe, expect, it } from 'vitest';
 import { PERMISSION_CACHE_TTL_MS, PermissionService } from './permission-service';
 import type { PermissionRepository } from './permission-repository';
+import type { TenantDb } from '@erp/platform-tenancy';
 
 const TENANT = newId();
 const MEMBERSHIP = newId();
 
-/** Repositório de mentira: só conta quantas vezes foi consultado. */
+/** Repositório e transação de mentira: só contam quantas vezes o banco seria consultado. */
 function fakeRepository(permissions: string[]) {
   const state = { calls: 0, permissions };
   const repository = {
@@ -15,13 +16,16 @@ function fakeRepository(permissions: string[]) {
       return Promise.resolve(state.permissions);
     },
   } as unknown as PermissionRepository;
-  return { repository, state };
+  const tenantDb = {
+    withTenantTx: <T>(fn: (tx: unknown) => Promise<T>): Promise<T> => fn({}),
+  } as unknown as TenantDb;
+  return { repository, tenantDb, state };
 }
 
 describe('F0-08 cache de permissões', () => {
   it('consulta o banco uma vez e reaproveita dentro dos 60 s', async () => {
-    const { repository, state } = fakeRepository(['platform.role.read']);
-    const service = new PermissionService(repository);
+    const { repository, tenantDb, state } = fakeRepository(['platform.role.read']);
+    const service = new PermissionService(tenantDb, repository);
 
     await service.permissionsOf(TENANT, MEMBERSHIP);
     await service.permissionsOf(TENANT, MEMBERSHIP);
@@ -30,9 +34,9 @@ describe('F0-08 cache de permissões', () => {
   });
 
   it('recarrega depois do TTL', async () => {
-    const { repository, state } = fakeRepository(['platform.role.read']);
+    const { repository, tenantDb, state } = fakeRepository(['platform.role.read']);
     let agora = 0;
-    const service = new PermissionService(repository, () => agora);
+    const service = new PermissionService(tenantDb, repository, () => agora);
 
     await service.permissionsOf(TENANT, MEMBERSHIP);
     agora += PERMISSION_CACHE_TTL_MS + 1;
@@ -42,8 +46,8 @@ describe('F0-08 cache de permissões', () => {
   });
 
   it('invalidar o tenant descarta o cache na hora', async () => {
-    const { repository, state } = fakeRepository(['platform.role.read']);
-    const service = new PermissionService(repository);
+    const { repository, tenantDb, state } = fakeRepository(['platform.role.read']);
+    const service = new PermissionService(tenantDb, repository);
 
     await service.permissionsOf(TENANT, MEMBERSHIP);
     service.invalidateTenant(TENANT);
@@ -53,8 +57,8 @@ describe('F0-08 cache de permissões', () => {
   });
 
   it('invalidar um tenant não mexe no cache de outro', async () => {
-    const { repository, state } = fakeRepository(['platform.role.read']);
-    const service = new PermissionService(repository);
+    const { repository, tenantDb, state } = fakeRepository(['platform.role.read']);
+    const service = new PermissionService(tenantDb, repository);
     const outroTenant = newId();
 
     await service.permissionsOf(TENANT, MEMBERSHIP);
@@ -66,8 +70,8 @@ describe('F0-08 cache de permissões', () => {
   });
 
   it('has responde pela permissão exata', async () => {
-    const { repository } = fakeRepository(['platform.role.read']);
-    const service = new PermissionService(repository);
+    const { repository, tenantDb } = fakeRepository(['platform.role.read']);
+    const service = new PermissionService(tenantDb, repository);
 
     expect(await service.has(TENANT, MEMBERSHIP, 'platform.role.read')).toBe(true);
     expect(await service.has(TENANT, MEMBERSHIP, 'platform.role.create')).toBe(false);

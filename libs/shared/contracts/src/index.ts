@@ -37,3 +37,11 @@ export {
   type Role,
   type UpdateRole,
 } from './roles';
+
+export {
+  auditActionSchema,
+  auditQuerySchema,
+  auditRecordSchema,
+  type AuditQueryInput,
+  type AuditRecordDto,
+} from './audit';

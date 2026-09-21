@@ -1,4 +1,4 @@
-import { Public } from '@erp/platform-iam';
+import { Public } from '@erp/platform-http';
 import { Controller, Get, Inject, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Pool } from 'pg';

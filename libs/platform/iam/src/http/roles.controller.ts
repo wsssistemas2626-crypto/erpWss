@@ -10,7 +10,7 @@ import {
   type Role,
   type UpdateRole,
 } from '@erp/shared-contracts';
-import { zodPipe } from '@erp/platform-http';
+import { RequirePermission, zodPipe } from '@erp/platform-http';
 import type { EntityId } from '@erp/shared-kernel';
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -18,7 +18,6 @@ import { requireAuthContext } from '../auth-context';
 import { AuthForbiddenError } from '../errors';
 import type { RoleRecord } from '../rbac/permission-repository';
 import { RoleService } from '../rbac/role-service';
-import { RequirePermission } from './require-permission.decorator';
 
 /** Papéis do tenant e atribuição a membros (F0-08). */
 @ApiTags('roles')
@@ -63,7 +62,8 @@ export class RolesController {
   @HttpCode(204)
   @ApiOperation({ summary: 'Exclui um papel que não seja do sistema' })
   async remove(@Param('id') id: EntityId): Promise<void> {
-    await this.roles.remove(this.tenantId(), id);
+    const auth = requireAuthContext();
+    await this.roles.remove(this.tenantId(), id, auth.user.id);
   }
 
   @Get('memberships/:id/roles')
@@ -80,7 +80,8 @@ export class RolesController {
     @Param('id') id: EntityId,
     @Body(zodPipe(assignRolesSchema)) body: AssignRoles,
   ): Promise<{ roleIds: readonly EntityId[] }> {
-    return { roleIds: await this.roles.assignRoles(this.tenantId(), id, body) };
+    const auth = requireAuthContext();
+    return { roleIds: await this.roles.assignRoles(this.tenantId(), id, body, auth.user.id) };
   }
 
   private tenantId(): EntityId {

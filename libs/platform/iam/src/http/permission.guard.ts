@@ -3,8 +3,8 @@ import { Reflector } from '@nestjs/core';
 import { getAuthContext } from '../auth-context';
 import { AuthForbiddenError, AuthInvalidTokenError } from '../errors';
 import { PermissionService } from '../rbac/permission-service';
-import { IS_PUBLIC } from './public.decorator';
-import { REQUIRED_PERMISSION } from './require-permission.decorator';
+
+import { IS_PUBLIC, REQUIRED_PERMISSION } from '@erp/platform-http';
 
 /**
  * Autorização (ADR-004). Roda depois do `AuthGuard`, que já garantiu usuário, tenant

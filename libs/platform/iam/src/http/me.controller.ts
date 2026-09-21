@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { requireAuthContext, type AuthenticatedTenant } from '../auth-context';
-import { AllowWithoutTenant } from './public.decorator';
+import { AllowWithoutTenant } from '@erp/platform-http';
 
 export interface MeResponse {
   readonly user: { readonly id: string; readonly email: string; readonly name: string };

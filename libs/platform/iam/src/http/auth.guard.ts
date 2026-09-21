@@ -7,7 +7,7 @@ import {
   TenantInactiveError,
   TenantNotSelectedError,
 } from '../errors';
-import { ALLOWS_WITHOUT_TENANT, IS_PUBLIC } from './public.decorator';
+import { ALLOWS_WITHOUT_TENANT, IS_PUBLIC } from '@erp/platform-http';
 
 /**
  * Guard global de autenticação (ADR-004): **nega por padrão**.

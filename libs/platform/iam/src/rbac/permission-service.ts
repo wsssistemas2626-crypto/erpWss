@@ -1,3 +1,4 @@
+import { runInTenantContext, TenantDb } from '@erp/platform-tenancy';
 import type { EntityId } from '@erp/shared-kernel';
 import { PermissionRepository } from './permission-repository';
 
@@ -20,6 +21,7 @@ export class PermissionService {
   private readonly cache = new Map<string, CacheEntry>();
 
   constructor(
+    private readonly tenantDb: TenantDb,
     private readonly repository: PermissionRepository,
     private readonly now: () => number = Date.now,
   ) {}
@@ -31,9 +33,13 @@ export class PermissionService {
       return cached.permissions;
     }
 
-    const permissions = new Set(
-      await this.repository.findPermissionsByMembership(tenantId, membershipId),
+    const loaded = await runInTenantContext({ tenantId }, () =>
+      this.tenantDb.withTenantTx((tx) =>
+        this.repository.findPermissionsByMembership(tx, membershipId),
+      ),
     );
+
+    const permissions = new Set(loaded);
     this.cache.set(key, { permissions, expiresAt: this.now() + PERMISSION_CACHE_TTL_MS });
     return permissions;
   }

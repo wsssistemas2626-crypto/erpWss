@@ -1,5 +1,5 @@
 import { startPostgresTestEnv, type PostgresTestEnv } from '@erp/platform-db/testing';
-import { ProblemDetailsFilter } from '@erp/platform-http';
+import { ProblemDetailsFilter, Public } from '@erp/platform-http';
 import { createLogger } from '@erp/platform-observability';
 import { TenantDb, requireTenantId } from '@erp/platform-tenancy';
 import { withTenantSession } from '@erp/platform-tenancy/testing';
@@ -19,7 +19,7 @@ import {
 import { AuthGuard } from './http/auth.guard';
 import { AuthenticationMiddleware } from './http/authentication.middleware';
 import { MeController } from './http/me.controller';
-import { Public } from './http/public.decorator';
+
 import { IDENTITY_PROVIDER } from './identity-provider';
 import { IdentityRepository } from './infra/identity-repository';
 import { FakeIdentityProvider } from './testing';

@@ -23,7 +23,7 @@ EM_ANDAMENTO
 - [x] F0-06 — Convenções da API e observabilidade → fase-0#F0-06
 - [x] F0-07 — Verificação de token do Clerk e resolução de tenant → fase-0#F0-07 · ADR-004 · dominio/platform.md
 - [x] F0-08 — Autorização RBAC → fase-0#F0-08 · ADR-004
-- [ ] F0-09 — Auditoria → fase-0#F0-09 · dominio/platform.md
+- [x] F0-09 — Auditoria → fase-0#F0-09 · dominio/platform.md
 - [ ] F0-10 — Outbox e worker → fase-0#F0-10 · ADR-003
 - [ ] F0-11 — Sincronização Clerk: webhooks e JIT → fase-0#F0-11 · ADR-004
 - [ ] F0-12 — Front: autenticação e troca de organização (Clerk) → fase-0#F0-12
@@ -455,3 +455,44 @@ Rodada de decisão, sem item do backlog. Duas pendências abertas foram fechadas
   invalidação pelo outbox (F0-10).
 - `role_permissions` e `membership_roles` não têm `created_at`/`created_by`: são tabelas de ligação
   e quem registra a mudança é a auditoria (F0-09).
+
+### 2026-09-21 — F0-09 Auditoria
+
+**Feito**
+- Tabela `platform.audit_log` conforme `docs/dominio/platform.md`, com RLS e índice
+  `(tenant_id, entity, entity_id, occurred_at DESC)`.
+- `AuditService.record(tx, entry)` — recebe a **transação do caso de uso** como primeiro
+  argumento: se a escrita de negócio desfizer, o registro desfaz junto.
+- Mascaramento automático de PII, com `AuditRegistry` para cada módulo declarar os campos das
+  suas entidades, somado a uma lista de nomes sempre mascarados.
+- `GET /api/v1/audit?entity=&entityId=` com `platform.audit.read`, paginado, do mais recente ao
+  mais antigo.
+- `RoleService` passou a auditar criação, alteração, exclusão e atribuição de papéis.
+- 14 testes em `platform-audit` e os dois cenários Gherkin cobertos.
+
+**Decisões menores**
+- **PII vira um resumo do sha256, não um `[REDACTED]` fixo.** A trilha existe para responder
+  "mudou?", e dois `[REDACTED]` não respondem isso. Resumos iguais significam valor igual;
+  diferentes, valor alterado — sem guardar o dado pessoal.
+- **Refatoração do repositório de papéis**: todo método passou a receber a transação em vez de
+  abrir a sua. Sem isso não havia como gravar a mudança e a auditoria atomicamente. É o padrão que
+  os módulos da Fase 1 vão seguir: o serviço abre a transação, o repositório recebe.
+- **Os decorators `@Public`, `@AllowWithoutTenant` e `@RequirePermission` mudaram de
+  `platform/iam` para `platform/http`.** O IAM audita as próprias mudanças de papel, então depende
+  de `platform/audit`; se a auditoria precisasse do decorator do IAM, as duas libs fechariam um
+  ciclo. Os guards que leem os metadados continuam no IAM.
+- Pelo mesmo motivo existe `AuditTenantResolver`: a lib de auditoria não conhece o `AuthContext`
+  (que é do IAM); a composição em `apps/api` liga os dois.
+- **Correção do F0-08**: eu tinha proibido renomear papel do sistema, o que não está em lugar
+  nenhum — `docs/dominio/platform.md` diz apenas que papel semeado não pode ser *excluído*, e o
+  cenário Gherkin desta story renomeia o "Financeiro". A restrição de rename foi removida.
+- `REVOKE ALL` seguido de `GRANT SELECT, INSERT` na `audit_log`: os privilégios padrão do schema
+  `platform` concediam DML completo, o que daria UPDATE e DELETE à role da aplicação. O teste
+  pegou isso.
+- `app_platform` também escreve e lê a trilha: ação de worker precisa ser auditável.
+
+**Pendências**
+- Os módulos ainda não declaram campos PII (`AuditRegistry` registrado vazio em `apps/api`).
+  Cada entidade com PII na Fase 1 precisa declarar os seus, conforme o RNF020.
+- Auditar automaticamente todo caso de uso de escrita depende de disciplina, não de mecanismo. Se
+  virar problema, um decorator ou um interceptor por caso de uso resolveria.
