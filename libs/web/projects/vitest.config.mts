@@ -1,9 +1,10 @@
 import react from '@vitejs/plugin-react';
-import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [react(), tsconfigPaths()],
+  // Vite 8 resolve os aliases @erp/* do tsconfig nativamente.
+  resolve: { tsconfigPaths: true },
+  plugins: [react()],
   test: {
     globals: true,
     environment: 'jsdom',

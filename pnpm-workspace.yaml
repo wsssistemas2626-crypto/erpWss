@@ -1,10 +1,17 @@
 # Monorepo integrado (Nx): as dependências vivem no package.json da raiz.
-# Este arquivo fixa as configuracoes do pnpm do workspace.
+# Este arquivo fixa as configurações do pnpm do workspace.
 allowBuilds:
   '@swc/core': true
+  # ssh2/cpu-features só servem ao Docker remoto por SSH; aqui o socket é local
+  cpu-features: false
+  esbuild: true
   nx: true
+  protobufjs: true
+  ssh2: false
 
-# unplugin-swc é mais novo que o minimumReleaseAge padrão do pnpm; liberado
-# explicitamente para que a instalacao seja reproduzível.
+# Pacotes mais novos que o minimumReleaseAge padrão do pnpm, liberados
+# explicitamente para que a instalação seja reproduzível.
 minimumReleaseAgeExclude:
   - unplugin-swc@2.0.0
+  - drizzle-orm@0.45.3
+  - drizzle-kit@0.31.11

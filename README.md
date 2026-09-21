@@ -46,11 +46,37 @@ pnpm verify
 | `pnpm verify` | critério de pronto e `CHECK_CMD` do autoloop (igual a `check` até o item F0-14, depois inclui o E2E) |
 | `pnpm dev` | sobe `api`, `worker` e `web` em paralelo |
 | `pnpm build` | build de todos os projetos em `dist/` |
+| `pnpm db:up` / `pnpm db:down` | sobe/derruba o PostgreSQL 16 local (docker compose) |
+| `pnpm db:migrate` | cria as roles e aplica as migrations de todos os módulos |
 | `pnpm e2e` | testes Playwright (configurados no item F0-14) |
 | `pnpm format` | Prettier em todo o repositório |
 
 A API sobe em `http://localhost:${API_PORT}/api/v1` (health em `/api/v1/health`) e o front em
 `http://localhost:5173`.
+
+### Banco de dados
+
+```bash
+pnpm db:up        # PostgreSQL 16 em localhost:5432
+pnpm db:migrate   # roles + migrations (idempotente)
+```
+
+Três roles, conforme o ADR-001 — nenhuma delas é superusuária nem tem `BYPASSRLS`:
+
+| Role | Para quê |
+|---|---|
+| `app_owner` | dona dos schemas e das tabelas; roda as migrations |
+| `app_user` | conexão da aplicação; sujeita à RLS, não cria objetos |
+| `app_platform` | rotinas que atravessam tenants (outbox), restrita aos schemas de plataforma |
+
+`pnpm db:migrate` faz duas coisas: cria as roles (único passo que usa `DATABASE_URL_ADMIN`) e
+aplica, como `app_owner`, os arquivos `.sql` de cada `libs/<...>/src/infra/migrations` — a
+plataforma primeiro, depois os módulos em ordem alfabética. O que já rodou fica registrado em
+`platform.schema_migrations`, com checksum: editar uma migration já aplicada é erro.
+
+Os testes de integração sobem um Postgres real com Testcontainers
+(`startPostgresTestEnv()` em `@erp/platform-db/testing`) e rodam dentro do `pnpm check`,
+por isso o Docker é obrigatório para rodar os testes.
 
 ### Libs e fronteiras entre módulos
 

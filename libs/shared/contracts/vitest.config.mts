@@ -1,8 +1,8 @@
-import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  // Vite 8 resolve os aliases @erp/* do tsconfig nativamente.
+  resolve: { tsconfigPaths: true },
   test: {
     globals: true,
     environment: 'node',

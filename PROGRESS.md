@@ -17,7 +17,7 @@ EM_ANDAMENTO
 ### Fase 0 — Fundação (`docs/backlog/fase-0-fundacao.md`)
 - [x] F0-01 — Scaffold do monorepo → fase-0#F0-01
 - [x] F0-02 — Estrutura de libs e fronteiras → fase-0#F0-02 · ADR-002
-- [ ] F0-03 — Banco, roles e migrations → fase-0#F0-03 · ADR-001
+- [x] F0-03 — Banco, roles e migrations → fase-0#F0-03 · ADR-001
 - [ ] F0-04 — Shared kernel (Money, ids, erros, CPF/CNPJ) → fase-0#F0-04 · ADR-005
 - [ ] F0-05 — Tenancy e isolamento RLS → fase-0#F0-05 · ADR-001
 - [ ] F0-06 — Convenções da API e observabilidade → fase-0#F0-06
@@ -148,3 +148,51 @@ EM_ANDAMENTO
   F0-01, **não** foi feita nesta rodada: a lib foi criada vazia, mas mover o código para ela faria os
   apps importarem uma lib e esbarraria exatamente na pendência acima. Fica para a rodada que resolver
   o empacotamento (ou para o F0-06, que já mexe em configuração e observabilidade).
+
+### 2026-09-21 — F0-03 Banco de dados, roles e migrations
+
+**Feito**
+- `docker-compose.yml` com PostgreSQL 16 (alpine) e healthcheck; `pnpm db:up` / `pnpm db:down`.
+- Roles do ADR-001 criadas pelo passo inicial do `pnpm db:migrate`: `app_owner`, `app_user` e
+  `app_platform`, todas `NOSUPERUSER NOBYPASSRLS NOINHERIT`. `app_owner` vira dona do banco e do
+  schema `public`; `PUBLIC` perde tudo em `public`.
+- Executor de migrations em `libs/platform/db`: descobre `libs/<platform|modules>/*/src/infra/migrations`,
+  aplica os `.sql` em ordem (plataforma primeiro, módulos em ordem alfabética), cada um na sua
+  transação, e registra em `platform.schema_migrations` com checksum sha256.
+- Migrations criando os schemas `platform`, `organization`, `partners` e `projects`, com `USAGE` +
+  privilégios padrão de DML para `app_user` (e `app_platform` só na plataforma).
+- `startPostgresTestEnv()` em `@erp/platform-db/testing`: sobe o contêiner, cria as roles, aplica as
+  migrations e entrega pools e instâncias Drizzle como `app_owner`, `app_user` e `app_platform`.
+- 10 testes de integração em `pnpm check`, incluindo o cenário Gherkin da story
+  (`rolbypassrls` falso e `app_user` não é dona de tabela nenhuma).
+- Verificado à mão: `pnpm db:up` + `pnpm db:migrate` duas vezes — 4 migrations na primeira,
+  nenhuma na segunda; `app_user` conecta, tem `USAGE` e não tem `CREATE` nos schemas.
+
+**Decisões menores**
+- **Nova variável `DATABASE_URL_ADMIN`** (e `DATABASE_URL_PLATFORM`). Não dá para criar a role dona
+  do banco conectando como ela mesma: o passo de roles precisa de uma conexão administrativa. Ela é
+  usada só nesse passo; nem a API nem o worker a enxergam. As senhas das roles saem das próprias
+  `DATABASE_URL_*`, então URL e role nunca saem de sincronia.
+- Migrations são `.sql` escritas à mão com um executor próprio, em vez do `drizzle-kit migrate`:
+  roles, grants, privilégios padrão e (no F0-05) políticas de RLS não são expressáveis no schema do
+  Drizzle, e o `drizzle-kit` assume uma pasta única, não uma por módulo. O `drizzle-kit` continua
+  configurado (`libs/platform/db/drizzle.config.ts`) e vai gerar o SQL das tabelas na mesma pasta.
+- O ledger usa o caminho da lib (`libs/modules/projects`) como chave do módulo: é inequívoco e não
+  depende de uma lista fixa de módulos no código da plataforma.
+- Migration já aplicada é imutável: se o checksum mudar, o executor falha com mensagem explícita.
+- `tsx` adicionado como dependência de desenvolvimento para rodar o `pnpm db:migrate` (TypeScript
+  direto, sem etapa de build). É a única forma hoje de executar um script TS do repositório fora do
+  Vitest — ver a pendência de empacotamento do F0-02.
+- `vite-tsconfig-paths` **removido**: o Vite 8 resolve os `paths` do tsconfig nativamente com
+  `resolve.tsconfigPaths: true`, e o próprio Vite avisava isso a cada execução. Os 19 configs foram
+  migrados; uma dependência a menos e `pnpm verify` segue sem avisos.
+- `@erp/platform-db/testing` é uma entrada separada da lib, para que o Testcontainers nunca entre
+  pelo `index.ts` da aplicação.
+- `ssh2` e `cpu-features` (nativos, opcionais do Testcontainers) ficaram com `allowBuilds: false`:
+  só servem a Docker remoto por SSH e falhavam a compilação por falta de toolchain no contêiner.
+
+**Pendências**
+- O `pnpm check` agora exige Docker. O item F0-15 (CI) precisa de um runner com Docker disponível.
+- Continua valendo a pendência de empacotamento registrada no F0-02 (build e runtime dos apps de
+  backend não resolvem os aliases `@erp/*`). Este item não esbarrou nela porque `pnpm db:migrate`
+  roda por `tsx` e os testes rodam pelo Vitest.

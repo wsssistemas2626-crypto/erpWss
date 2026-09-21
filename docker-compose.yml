@@ -1,0 +1,23 @@
+# Postgres local de desenvolvimento. Sobe com `pnpm db:up`.
+# O superusuário `postgres` só existe para criar as roles da aplicação
+# (ver `pnpm db:migrate`); a aplicação nunca conecta com ele.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: erp-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: erp
+    ports:
+      - '5432:5432'
+    volumes:
+      - erp-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d erp']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  erp-postgres-data:

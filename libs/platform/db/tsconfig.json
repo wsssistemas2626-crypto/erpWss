@@ -9,5 +9,5 @@
     "isolatedModules": false,
     "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "drizzle.config.ts"]
 }
