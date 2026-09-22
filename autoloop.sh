@@ -100,8 +100,14 @@ secao_status() {
   awk '/^## Status/{f=1;next} /^## /{f=0} f' "$PROGRESS_FILE" 2>/dev/null
 }
 
+# Título da última entrada do log de decisões: a linha "### <data> — <item>", e não a
+# última linha não vazia da seção (que é um fragmento do meio de um parágrafo).
+# O "### " e a data saem do resumo; a data já está no próprio commit.
 ultimo_item_log() {
-  awk '/^## Log de decisões/{f=1;next} /^## /{f=0} f && NF' "$PROGRESS_FILE" | tail -n1 | sed 's/^[-* ]*//' | cut -c1-120
+  awk '/^## Log de decisões/{f=1;next} /^## /{f=0} f && /^### /' "$PROGRESS_FILE" 2>/dev/null \
+    | tail -n1 \
+    | sed -E 's/^#+[[:space:]]*//; s/^[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]*[—-][[:space:]]*//' \
+    | cut -c1-120
 }
 
 salvar_falha_e_restaurar() {
